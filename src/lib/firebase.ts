@@ -59,7 +59,7 @@ if (
   const errorMessage =
     "CRITICAL_FIREBASE_CONFIG_ERROR: Firebase API Key or Project ID is MISSING or uses PLACEHOLDERS in src/lib/firebase.ts. " +
     "This means the environment variables (NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_PROJECT_ID) were 'undefined' or placeholders when read from 'process.env'. " +
-    "Refer to the SERVER CONSOLE LOGS above this message to see the 'RAW process.env...' values. " +
+    "VERY IMPORTANT: CHECK THE SERVER CONSOLE LOGS (where you run 'npm run dev') FOR THE 'RAW process.env...' VALUES printed just before this error to see what values the server is actually getting. " +
     "Ensure your /workspace/.env file is correctly named, located at the project root, contains your ACTUAL Firebase credentials (NO placeholders), and that you RESTARTED the Next.js server (Ctrl+C, then 'npm run dev'). " +
     `Problematic apiKey from process.env: '${rawApiKey}', Problematic projectId from process.env: '${rawProjectId}'. ` +
     "The application cannot start without valid Firebase configuration.";
