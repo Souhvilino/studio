@@ -1,13 +1,16 @@
+
+import type { Timestamp } from 'firebase/firestore';
+
 export interface ChatMessage {
   id: string;
   userId: string;
   text: string;
-  timestamp: Date;
+  timestamp: Date; // Converted to Date on client
   isLocalUser: boolean;
-  originalText?: string; // For storing original text if translated
-  translatedText?: string; // For storing translated text
-  translationError?: string; // If translation fails
-  isTranslating?: boolean; // To show loading state for translation
+  originalText?: string;
+  translatedText?: string;
+  translationError?: string;
+  isTranslating?: boolean;
 }
 
 export type ChatState = "idle" | "searching" | "connecting" | "chatting" | "error";
@@ -19,3 +22,34 @@ export interface ReportData {
   roomId: string | null;
   timestamp?: any; // Firestore ServerTimestamp
 }
+
+export interface UserStatusData {
+  userId: string;
+  status: 'searching' | 'chatting' | 'idle';
+  keywords?: string[];
+  lastSeen: any; // Firestore ServerTimestamp
+  roomId?: string | null;
+}
+
+export interface RoomData {
+  id: string;
+  users: string[];
+  keywords?: string[];
+  createdAt: any; // Firestore ServerTimestamp
+  status: 'pending' | 'active' | 'closed'; // pending could be for signaling
+  endedAt?: any; // Firestore ServerTimestamp
+}
+
+export interface SignalPayload {
+  type: 'offer' | 'answer' | 'candidate';
+  sdp?: string;
+  candidate?: RTCIceCandidateInit | RTCIceCandidate;
+}
+
+export interface SignalData {
+  senderId: string;
+  receiverId: string;
+  signal: SignalPayload;
+  timestamp: any; // Firestore ServerTimestamp
+}
+    
