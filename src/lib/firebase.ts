@@ -1,16 +1,16 @@
 
-import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { getAuth, Auth } from "firebase/auth";
-import { getFirestore, Firestore } from "firebase/firestore";
+import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
+import { getAuth, type Auth } from "firebase/auth";
+import { getFirestore, type Firestore } from "firebase/firestore";
 // import { getFunctions, Functions } from "firebase/functions"; // If needed later for matching etc.
 // import { getStorage, FirebaseStorage } from "firebase/storage"; // If vision API needs direct upload
 
-// **NEW DETAILED LOGGING**
+// **VERY IMPORTANT: CHECK YOUR SERVER CONSOLE FOR THIS LOG!**
 console.log(
-  "Attempting to read Firebase environment variables from process.env:",
-  `NEXT_PUBLIC_FIREBASE_API_KEY: ${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`,
+  "Firebase Lib Init: Reading Environment Variables from process.env:",
+  `NEXT_PUBLIC_FIREBASE_API_KEY: >>>${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}<<<`,
+  `NEXT_PUBLIC_FIREBASE_PROJECT_ID: >>>${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}<<<`,
   `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}`,
-  `NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}`,
   `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}`,
   `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}`,
   `NEXT_PUBLIC_FIREBASE_APP_ID: ${process.env.NEXT_PUBLIC_FIREBASE_APP_ID}`,
@@ -26,9 +26,6 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
-
-// Log the config to help debug
-console.log("Firebase Config object constructed in src/lib/firebase.ts:", firebaseConfig);
 
 // More stringent check for API key and Project ID validity before attempting to initialize Firebase
 if (
@@ -100,6 +97,6 @@ try {
 }
 
 // functions = getFunctions(app); // Initialize if you use callable functions
-// storage = getStorage(app); // Initialize if used by Vision API or other features
+// storage = getStorage(app); // Initialize if you use Firebase Storage
 
 export { app, auth, db };
