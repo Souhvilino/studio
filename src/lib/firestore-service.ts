@@ -2,174 +2,203 @@
 import { db } from './firebase';
 import { 
   collection, addDoc, query, where, getDocs, doc, updateDoc, onSnapshot, 
-  serverTimestamp, limit, orderBy, setDoc, getDoc, writeBatch, QuerySnapshot, DocumentData, QueryDocumentSnapshot 
+  serverTimestamp, limit, orderBy, setDoc, getDoc, writeBatch, type QuerySnapshot, type DocumentData, type QueryDocumentSnapshot, Timestamp, startAfter 
 } from 'firebase/firestore';
-import type { ChatMessage, ReportData, UserStatusData, RoomData, SignalData } from '@/types';
+import type { ChatMessage, ReportData, UserStatusData, RoomData, SignalData, SignalPayload } from '@/types';
 
 // --- User Status and Matching ---
 
 export async function updateUserStatus(userId: string, status: UserStatusData['status'], keywords?: string[], roomId?: string | null): Promise<void> {
+  const currentTimestamp = Timestamp.now();
+  console.log(`[FirestoreService][${currentTimestamp.toMillis()}] updateUserStatus for ${userId}: status=${status}, roomId=${roomId === undefined ? 'not specified' : roomId}, keywords=${keywords?.join(',')}`);
   const userStatusRef = doc(db, 'userStatuses', userId);
-  const data: UserStatusData = {
-    userId,
+  const data: Partial<UserStatusData> = {
     status,
-    lastSeen: serverTimestamp(),
+    lastSeen: serverTimestamp(), // Firestore server timestamp for accuracy
   };
   if (keywords !== undefined) data.keywords = keywords;
-  if (roomId !== undefined) data.roomId = roomId; // Allow explicitly setting to null
+  if (roomId !== undefined) data.roomId = roomId; 
 
-  await setDoc(userStatusRef, data, { merge: true });
+  try {
+    await setDoc(userStatusRef, data, { merge: true });
+    console.log(`[FirestoreService][${currentTimestamp.toMillis()}] User status successfully updated for ${userId} to ${status}.`);
+  } catch (error) {
+    console.error(`[FirestoreService][${currentTimestamp.toMillis()}] Error updating user status for ${userId}:`, error);
+    throw error;
+  }
 }
 
+
 export async function findMatch(currentUserId: string, searchKeywords?: string[]): Promise<UserStatusData | null> {
+  const currentTimestamp = Timestamp.now();
+  console.log(`[FirestoreService][${currentTimestamp.toMillis()}] findMatch called for ${currentUserId} with keywords:`, searchKeywords);
   let q;
   const usersRef = collection(db, "userStatuses");
+  // Consider users active in the last 2 minutes for matching to avoid matching with stale entries
+  const twoMinutesAgo = Timestamp.fromDate(new Date(Date.now() - 2 * 60 * 1000));
 
   if (searchKeywords && searchKeywords.length > 0) {
-    // Firestore's array-contains-any is limited to 10, and OR queries are complex.
-    // For simplicity, we'll try with the first keyword. A more robust solution would involve
-    // fetching more users and filtering client-side, or using a dedicated search service.
+    console.log(`[FirestoreService][${currentTimestamp.toMillis()}] Searching with keywords: ${searchKeywords.slice(0,10).join(', ')} for user ${currentUserId}`);
     q = query(
       usersRef,
       where("status", "==", "searching"),
-      where("userId", "!=", currentUserId),
-      where("keywords", "array-contains-any", searchKeywords.slice(0,10)), // Use up to 10 keywords for query
+      where("userId", "!=", currentUserId), // Don't match with self
+      where("keywords", "array-contains-any", searchKeywords.slice(0,10)), 
+      where("lastSeen", ">", twoMinutesAgo), 
       orderBy("lastSeen", "asc"),
-      limit(10) // Fetch a few and pick the best one or first one client side
+      limit(10) 
     );
   } else {
-    // No keywords provided, find any searching user
+    console.log(`[FirestoreService][${currentTimestamp.toMillis()}] Searching for any user (no keywords) for user ${currentUserId}.`);
     q = query(
       usersRef,
       where("status", "==", "searching"),
       where("userId", "!=", currentUserId),
+      where("lastSeen", ">", twoMinutesAgo),
       orderBy("lastSeen", "asc"),
       limit(1)
     );
   }
 
-  const querySnapshot = await getDocs(q);
-  if (!querySnapshot.empty) {
-    // If keywords were used, we might need further client-side filtering if array-contains-any wasn't specific enough
-    // For now, let's return the first potential match.
-    return querySnapshot.docs[0].data() as UserStatusData;
-  }
-  return null;
-}
-
-export function listenToUserStatus(userId: string, callback: (status: UserStatusData | null) => void): () => void {
-  const userStatusRef = doc(db, 'userStatuses', userId);
-  return onSnapshot(userStatusRef, (docSnap) => {
-    if (docSnap.exists()) {
-      callback(docSnap.data() as UserStatusData);
-    } else {
-      callback(null);
+  try {
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      const matchedDoc = querySnapshot.docs[0]; // Prioritize the one waiting longest
+      console.log(`[FirestoreService][${currentTimestamp.toMillis()}] Match found for ${currentUserId}: ${matchedDoc.id}`, matchedDoc.data());
+      return { userId: matchedDoc.id, ...matchedDoc.data() } as UserStatusData;
     }
-  });
+    console.log(`[FirestoreService][${currentTimestamp.toMillis()}] No match found for ${currentUserId}`);
+    return null;
+  } catch (error) {
+    console.error(`[FirestoreService][${currentTimestamp.toMillis()}] Error in findMatch for ${currentUserId}:`, error);
+    return null;
+  }
 }
-
 
 // --- Room Management ---
 export async function createRoom(userId1: string, userId2: string, keywordsUsed?: string[]): Promise<string> {
+  const currentTimestamp = Timestamp.now();
+  console.log(`[FirestoreService][${currentTimestamp.toMillis()}] createRoom called for users: ${userId1}, ${userId2}`);
   const roomsCollection = collection(db, 'rooms');
-  const roomDocRef = doc(roomsCollection); // Generate new ID
+  const roomDocRef = doc(roomsCollection); 
 
   const roomData: RoomData = {
     id: roomDocRef.id,
     users: [userId1, userId2],
     keywords: keywordsUsed || [],
     createdAt: serverTimestamp(),
-    status: 'pending', // Or 'signaling'
+    status: 'active', 
   };
   
   const batch = writeBatch(db);
   batch.set(roomDocRef, roomData);
   
-  // Update status for userId1
   const user1StatusRef = doc(db, 'userStatuses', userId1);
-  batch.update(user1StatusRef, { status: 'chatting', roomId: roomDocRef.id });
+  batch.update(user1StatusRef, { status: 'chatting', roomId: roomDocRef.id, keywords: [] });
 
-  // Update status for userId2
   const user2StatusRef = doc(db, 'userStatuses', userId2);
-  batch.update(user2StatusRef, { status: 'chatting', roomId: roomDocRef.id });
+  batch.update(user2StatusRef, { status: 'chatting', roomId: roomDocRef.id, keywords: [] });
   
-  await batch.commit();
-  return roomDocRef.id;
+  try {
+    await batch.commit();
+    console.log(`[FirestoreService][${currentTimestamp.toMillis()}] Room ${roomDocRef.id} created and user statuses (for ${userId1}, ${userId2}) updated to 'chatting'.`);
+    return roomDocRef.id;
+  } catch (error) {
+    console.error(`[FirestoreService][${currentTimestamp.toMillis()}] Error committing batch for createRoom:`, error);
+    throw error; 
+  }
 }
 
 export async function getRoomData(roomId: string): Promise<RoomData | null> {
+  const currentTimestamp = Timestamp.now();
+  console.log(`[FirestoreService][${currentTimestamp.toMillis()}] getRoomData called for roomId: ${roomId}`);
   const roomRef = doc(db, 'rooms', roomId);
   const roomSnap = await getDoc(roomRef);
   if (roomSnap.exists()) {
+    console.log(`[FirestoreService][${currentTimestamp.toMillis()}] Room data found for ${roomId}:`, roomSnap.data());
     return { id: roomSnap.id, ...roomSnap.data() } as RoomData;
   }
+  console.log(`[FirestoreService][${currentTimestamp.toMillis()}] No room data found for ${roomId}`);
   return null;
 }
 
-export async function cleanupRoom(roomId: string): Promise<void> {
+export async function cleanupRoom(roomId: string, currentUserId: string): Promise<void> {
+  const currentTimestamp = Timestamp.now();
+  console.log(`[FirestoreService][${currentTimestamp.toMillis()}] cleanupRoom called for roomId: ${roomId} by user: ${currentUserId}`);
   const roomRef = doc(db, 'rooms', roomId);
   const batch = writeBatch(db);
 
   try {
-    const roomData = await getRoomData(roomId);
-    if (roomData && roomData.users) {
+    const roomData = await getRoomData(roomId); // This already logs
+    if (roomData) {
+      // Update status for all users in the room to idle
       roomData.users.forEach(userId => {
         const userStatusRef = doc(db, 'userStatuses', userId);
-        batch.update(userStatusRef, { status: 'idle', roomId: null });
+        batch.update(userStatusRef, { status: 'idle', roomId: null, keywords: [] });
+        console.log(`[FirestoreService][${currentTimestamp.toMillis()}] cleanupRoom: Queued update for ${userId} to idle.`);
       });
+      // Mark room as closed
+      batch.update(roomRef, { status: 'closed', endedAt: serverTimestamp() });
+      console.log(`[FirestoreService][${currentTimestamp.toMillis()}] cleanupRoom: Queued update for room ${roomId} to closed.`);
+    } else {
+        console.log(`[FirestoreService][${currentTimestamp.toMillis()}] cleanupRoom: Room ${roomId} not found. Only updating initiating user ${currentUserId} status if they were not idle.`);
+        // If room doesn't exist, at least update the current user if they thought they were in a room.
+        const currentUserStatusRef = doc(db, 'userStatuses', currentUserId);
+        // Fetch current status to avoid unnecessary write if already idle
+        const currentUserStatusSnap = await getDoc(currentUserStatusRef);
+        if(currentUserStatusSnap.exists() && currentUserStatusSnap.data().status !== 'idle') {
+            batch.update(currentUserStatusRef, { status: 'idle', roomId: null, keywords: [] });
+        }
     }
-    batch.update(roomRef, { status: 'closed', endedAt: serverTimestamp() });
     await batch.commit();
+    console.log(`[FirestoreService][${currentTimestamp.toMillis()}] cleanupRoom: Batch committed for room ${roomId}.`);
   } catch (error) {
-    console.error("Error cleaning up room:", error);
-    // Fallback to just updating room status if user updates fail
-    await updateDoc(roomRef, { status: 'closed', endedAt: serverTimestamp() }).catch(err => console.error("Fallback room cleanup failed:", err));
+    console.error(`[FirestoreService][${currentTimestamp.toMillis()}] Error cleaning up room ${roomId}:`, error);
+    // Fallback: try to update current user's status at least
+    const currentUserStatusRef = doc(db, 'userStatuses', currentUserId);
+    await updateUserStatus(currentUserId, 'idle', [], null).catch(err => console.error("Fallback user status update failed:", err));
   }
 }
 
+
 // --- WebRTC Signaling ---
-export async function sendSignal(roomId: string, senderId: string, receiverId: string, signal: SignalData['signal']): Promise<void> {
+export async function sendSignal(roomId: string, senderId: string, receiverId: string, signal: SignalPayload): Promise<void> {
+  const currentTimestamp = Timestamp.now();
+  console.log(`[FirestoreService][${currentTimestamp.toMillis()}] sendSignal from ${senderId} to ${receiverId} in room ${roomId}: type=${signal.type}`);
   const signalsCollection = collection(db, `rooms/${roomId}/signals`);
   const signalDataToSend: SignalData = {
     senderId,
     receiverId,
-    signal,
+    signal, 
     timestamp: serverTimestamp(),
   };
   await addDoc(signalsCollection, signalDataToSend);
 }
 
-export function listenForSignals(roomId: string, currentUserId: string, callback: (signal: SignalData['signal']) => void): () => void {
+
+export function listenForSignals(roomId: string, currentUserId: string, callback: (signalPayload: SignalPayload) => void): () => void {
+  const listenStartMs = Timestamp.now().toMillis();
+  console.log(`[FirestoreService][${listenStartMs}] listenForSignals setup for user ${currentUserId} in room ${roomId}`);
   const signalsCollection = collection(db, `rooms/${roomId}/signals`);
+  
+  // Only listen for signals created after this listener was initialized.
   const q = query(
     signalsCollection, 
-    where("receiverId", "==", currentUserId), 
-    orderBy("timestamp", "asc")
+    where("receiverId", "==", currentUserId),
+    where("timestamp", ">", Timestamp.fromMillis(listenStartMs)), // Query for newer signals
+    orderBy("timestamp", "asc") 
   );
   
-  let initialLoadDone = false;
-  let lastProcessedTimestamp: any = null; // Store the timestamp of the last processed signal
-
   const unsubscribe = onSnapshot(q, (snapshot) => {
-    if (!initialLoadDone) {
-        // On initial load, find the latest signal to avoid processing old ones if any
-        if (snapshot.docs.length > 0) {
-            lastProcessedTimestamp = snapshot.docs[snapshot.docs.length - 1].data().timestamp;
-        }
-        initialLoadDone = true;
-        return; // Skip initial documents to avoid re-processing old signals on reconnect
-    }
-
     snapshot.docChanges().forEach((change) => {
       if (change.type === "added") {
         const data = change.doc.data() as SignalData;
-        // Check if this signal is newer than the last processed one
-        if (!lastProcessedTimestamp || (data.timestamp && data.timestamp > lastProcessedTimestamp)) {
-          callback(data.signal);
-          lastProcessedTimestamp = data.timestamp;
-        }
+        console.log(`[FirestoreService][${Timestamp.now().toMillis()}] Received signal for ${currentUserId} in room ${roomId}: type=${data.signal.type}, sender=${data.senderId}`);
+        callback(data.signal);
       }
     });
+  }, (error) => {
+    console.error(`[FirestoreService][${Timestamp.now().toMillis()}] Error listening for signals in room ${roomId} for user ${currentUserId}:`, error);
   });
   return unsubscribe;
 }
@@ -177,6 +206,8 @@ export function listenForSignals(roomId: string, currentUserId: string, callback
 
 // --- Chat Messages ---
 export async function sendMessage(roomId: string, message: Omit<ChatMessage, 'id' | 'timestamp' | 'isLocalUser'> & { timestamp?: any }): Promise<string> {
+  const currentTimestamp = Timestamp.now();
+  console.log(`[FirestoreService][${currentTimestamp.toMillis()}] sendMessage to room ${roomId}:`, message.text.substring(0, 20) + "...");
   const messagesCollection = collection(db, `rooms/${roomId}/messages`);
   const docRef = await addDoc(messagesCollection, {
     ...message,
@@ -188,50 +219,48 @@ export async function sendMessage(roomId: string, message: Omit<ChatMessage, 'id
 export function listenForMessages(
   roomId: string,
   callback: (messages: ChatMessage[], newLastVisibleDoc: QueryDocumentSnapshot<DocumentData> | null) => void,
-  lastVisibleDoc: QueryDocumentSnapshot<DocumentData> | null = null,
-  pageSize: number = 20
+  _lastVisibleDoc: QueryDocumentSnapshot<DocumentData> | null = null,
+  _pageSize: number = 50 
 ): () => void {
-  let q = query(
+  const listenStartMs = Timestamp.now().toMillis();
+  console.log(`[FirestoreService][${listenStartMs}] listenForMessages setup for room ${roomId}`);
+  
+  const q = query(
     collection(db, `rooms/${roomId}/messages`),
-    orderBy('timestamp', 'asc') // Fetch oldest first to easily append to existing messages
+    orderBy('timestamp', 'asc')
   );
-
-  if (lastVisibleDoc) {
-    q = query(q, orderBy('timestamp', 'asc'), limit(pageSize), startAfter(lastVisibleDoc));
-  } else {
-    q = query(q, orderBy('timestamp', 'desc'), limit(pageSize)); // Get latest N messages on initial load
-  }
   
   return onSnapshot(q, (snapshot: QuerySnapshot<DocumentData>) => {
-    let newMessages: ChatMessage[];
-    let newLastDoc: QueryDocumentSnapshot<DocumentData> | null = null;
+    const newMessages: ChatMessage[] = [];
+    snapshot.docChanges().forEach((change) => {
+        if (change.type === "added") {
+            const data = change.doc.data();
+            // Filter messages that are newer than when the listener started, if desired, though 'added' should handle this for new messages.
+            // const messageTimestamp = (data.timestamp as Timestamp)?.toMillis();
+            // if (!messageTimestamp || messageTimestamp >= listenStartMs) {
+              newMessages.push({
+                  id: change.doc.id,
+                  ...data,
+                  timestamp: (data.timestamp as Timestamp)?.toDate() || new Date(),
+              } as ChatMessage);
+            // }
+        }
+    });
 
-    if (!lastVisibleDoc && snapshot.docs.length > 0) { // Initial load (latest N)
-        newMessages = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp?.toDate() || new Date(),
-      } as ChatMessage)).reverse(); // Reverse to show newest at bottom
-      newLastDoc = snapshot.docs[0]; // The oldest of the latest N for next "load older" if using desc
-                                     // Actually, if we want infinite scroll up, this needs more thought.
-                                     // For now, simple latest N.
-    } else { // Subsequent loads (older messages)
-        newMessages = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp?.toDate() || new Date(),
-      } as ChatMessage));
-      newLastDoc = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : lastVisibleDoc;
+    if (newMessages.length > 0) {
+      console.log(`[FirestoreService][${Timestamp.now().toMillis()}] listenForMessages: ${newMessages.length} new messages for room ${roomId}`);
+      callback(newMessages, snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null);
     }
-    
-    callback(newMessages, newLastDoc);
   }, (error) => {
-    console.error("Error listening for messages:", error);
+    console.error(`[FirestoreService][${Timestamp.now().toMillis()}] Error listening for messages in room ${roomId}:`, error);
   });
 }
 
+
 // --- Reporting ---
 export async function createReport(reportData: ReportData): Promise<void> {
+  const currentTimestamp = Timestamp.now();
+  console.log(`[FirestoreService][${currentTimestamp.toMillis()}] createReport called for user: ${reportData.reportedUserId}`);
   const reportsCollection = collection(db, 'reports');
   await addDoc(reportsCollection, {
     ...reportData,
