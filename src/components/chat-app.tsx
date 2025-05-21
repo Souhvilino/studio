@@ -17,8 +17,8 @@ import { moderateText, type ModerateTextInput } from '@/ai/flows/ai-moderation';
 import { translateMessage, type TranslateMessageInput } from '@/ai/flows/real-time-translation';
 import * as FirestoreService from '@/lib/firestore-service';
 import { useWebRTCSignaling } from '@/hooks/use-webrtc-signaling';
-import { db } from '@/lib/firebase';
-import { onSnapshot, doc, type QueryDocumentSnapshot, type DocumentData } from 'firebase/firestore';
+import { db } from '@/lib/firebase'; // Direct import for db
+import { onSnapshot, doc } from 'firebase/firestore'; // Direct import for onSnapshot, doc
 
 
 export default function ChatApp() {
@@ -81,7 +81,7 @@ export default function ChatApp() {
 
   useEffect(() => {
     if (roomId && chatState === 'chatting' && firebaseUser?.uid) {
-      const unsubscribe = FirestoreService.listenForMessages(roomId, (newMessages, newLastDoc) => {
+      const unsubscribe = FirestoreService.listenForMessages(roomId, (newMessages) => {
         setMessages(prevMessages => {
           const existingMessageIds = new Set(prevMessages.map(m => m.id));
           const uniqueNewMessages = newMessages.filter(nm => !existingMessageIds.has(nm.id));
@@ -103,18 +103,17 @@ export default function ChatApp() {
     }
     if (chatStateRef.current === 'chatting' || chatStateRef.current === 'connecting') {
         console.log(`[${firebaseUser.uid}] handleStartSearch: Already chatting or connecting, stopping current chat first.`);
-        await handleStopChat(false); // Ensure clean state before new search
+        await handleStopChat(false); 
     }
-    // Clear any previous timeout explicitly
+    
     if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
         searchTimeoutRef.current = null;
         console.log(`[${firebaseUser.uid}] Cleared previous search timeout before starting new search.`);
     }
 
-
     console.log(`[${firebaseUser.uid}] handleStartSearch called`);
-    setChatState('searching'); // Update state, which updates chatStateRef
+    setChatState('searching'); 
     toast({ title: "Searching...", description: "Looking for a chat partner." });
     const searchKeywords = keywordsInput.split(',').map(k => k.trim()).filter(Boolean);
     
@@ -131,26 +130,24 @@ export default function ChatApp() {
           matchedUser = await FirestoreService.findMatch(firebaseUser.uid); 
       }
       
-      console.log(`[${firebaseUser.uid}] Updating current user status to 'searching' with keywords:`, searchKeywords);
-      await FirestoreService.updateUserStatus(firebaseUser.uid, 'searching', searchKeywords, null);
-
-      if (matchedUser && matchedUser.userId !== firebaseUser.uid) {
+      if (matchedUser && matchedUser.userId !== firebaseUser.uid) { // Match Found!
         console.log(`[${firebaseUser.uid}] Match found: ${matchedUser.userId}, with keywords:`, matchedUser.keywords);
         setRemoteUserId(matchedUser.userId);
         
         const roomKeywords = Array.from(new Set([...searchKeywords, ...(matchedUser.keywords || [])]));
         const newRoomId = await FirestoreService.createRoom(firebaseUser.uid, matchedUser.userId, roomKeywords);
         console.log(`[${firebaseUser.uid}] Room created: ${newRoomId}`);
-        setRoomId(newRoomId); // Updates roomIdRef
+        setRoomId(newRoomId); 
         setIsCaller(true);
         
-        setChatState('connecting'); // Updates chatStateRef
+        setChatState('connecting'); 
         console.log(`[${firebaseUser.uid}] Chat state set to connecting. Setting up local stream.`);
         await webrtcSetupLocalStreamHook(); 
-      } else {
-        console.log(`[${firebaseUser.uid}] No immediate match found. User is now discoverable with keywords:`, searchKeywords);
-        // Clear previous timeout again just in case, before setting a new one
-        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+      } else { // No immediate match found
+        console.log(`[${firebaseUser.uid}] No immediate match found. Updating self to 'searching' to be discoverable with keywords:`, searchKeywords);
+        await FirestoreService.updateUserStatus(firebaseUser.uid, 'searching', searchKeywords, null); // Set self to searching
+
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); // Clear again just in case
         searchTimeoutRef.current = setTimeout(async () => {
           console.log(`[${firebaseUser.uid}] Search timeout initiated. Current chatStateRef: ${chatStateRef.current}, roomIdRef: ${roomIdRef.current}`);
           if (chatStateRef.current === 'searching' && !roomIdRef.current && firebaseUser) {
@@ -264,7 +261,6 @@ export default function ChatApp() {
     const previousRoomId = roomIdRef.current; 
     const previousChatState = chatStateRef.current;
 
-    // Reset local state immediately
     setRoomId(null);
     setRemoteUserId(null);
     setMessages([]);
@@ -285,70 +281,85 @@ export default function ChatApp() {
         console.warn(`[handleStopChat] Firebase user not available, cannot update Firestore status.`);
     }
 
-    if (initiateNewSearch && firebaseUser) { // only start search if user is available
+    if (initiateNewSearch && firebaseUser) { 
       console.log(`[${firebaseUser.uid}] Initiating new search after stopping chat.`);
       handleStartSearch(); 
     } else if (!initiateNewSearch) {
         toast({ title: "Chat Ended", description: "The chat session has been closed." });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firebaseUser, webrtcCleanup, toast]); // handleStartSearch removed to break potential loop, called conditionally
+  }, [firebaseUser, webrtcCleanup, toast]); 
   
  useEffect(() => {
     if (firebaseUser?.uid) {
       const userStatusDocRef = doc(db, 'userStatuses', firebaseUser.uid);
       const unsubscribe = onSnapshot(userStatusDocRef, async (docSnap) => {
         const userStatus = docSnap.exists() ? docSnap.data() as UserStatusData : null;
-        const currentUid = firebaseUser.uid; // For logs
+        const currentUid = firebaseUser.uid; 
 
         console.log(`[${currentUid}] RAW USER STATUS UPDATE RECEIVED:`, JSON.stringify(userStatus));
         console.log(`[${currentUid}] Current refs BEFORE processing status: roomIdRef=${roomIdRef.current}, chatStateRef=${chatStateRef.current}`);
 
-        if (userStatus && userStatus.status === 'chatting' && userStatus.roomId && (!roomIdRef.current || roomIdRef.current !== userStatus.roomId)) {
-          console.log(`[${currentUid}] STATUS LISTENER: Matched or call incoming. Status is 'chatting', new room ID: ${userStatus.roomId}. My current roomIdRef: ${roomIdRef.current}. My chatStateRef: ${chatStateRef.current}`);
-          
-          if (searchTimeoutRef.current) {
-            clearTimeout(searchTimeoutRef.current);
-            searchTimeoutRef.current = null;
-            console.log(`[${currentUid}] Cleared search timeout because user is now 'chatting' (detected by listener).`);
-          }
-          
-          // Important: Check if we are already trying to connect to this room to avoid re-processing
-          if (roomIdRef.current === userStatus.roomId && chatStateRef.current === 'connecting') {
-            console.log(`[${currentUid}] Already processing connection for room ${userStatus.roomId}. Ignoring this status update.`);
-            return;
-          }
+        if (userStatus && userStatus.status === 'chatting' && userStatus.roomId) {
+           // This user is being put into a 'chatting' state by Firestore.
+           // This typically means they are the CALLEE or it's a confirmation for the CALLER.
+          if (chatStateRef.current === 'searching' && (!roomIdRef.current || roomIdRef.current !== userStatus.roomId)) {
+            // CALLEE PATH: I was searching, and now I'm matched to a new/different room.
+            console.log(`[${currentUid}] STATUS LISTENER (CALLEE PATH): Transitioning from 'searching' to 'connecting'. New Room: ${userStatus.roomId}`);
+            if (searchTimeoutRef.current) {
+              clearTimeout(searchTimeoutRef.current);
+              searchTimeoutRef.current = null;
+              console.log(`[${currentUid}] Cleared search timeout because matched as callee.`);
+            }
+            
+            setRoomId(userStatus.roomId);
+            setChatState('connecting');
 
-          setRoomId(userStatus.roomId);
-          setChatState('connecting'); 
-
-          const roomData = await FirestoreService.getRoomData(userStatus.roomId);
-          if (roomData && roomData.users) {
-            console.log(`[${currentUid}] Fetched roomData for room ${userStatus.roomId}:`, JSON.stringify(roomData));
-            const otherUser = roomData.users.find((uid: string) => uid !== currentUid);
-            if (otherUser) {
-               console.log(`[${currentUid}] Found other user: ${otherUser}. Setting remoteUserId and isCaller=false.`);
-               setRemoteUserId(otherUser);
-               setIsCaller(false); // This user is the callee
-               console.log(`[${currentUid}] User is callee, state is 'connecting'. Setting up local stream.`);
-               await webrtcSetupLocalStreamHook(); // This should make localStream available
+            const roomData = await FirestoreService.getRoomData(userStatus.roomId);
+            if (roomData && roomData.users) {
+              console.log(`[${currentUid}] Fetched roomData for room ${userStatus.roomId}:`, JSON.stringify(roomData));
+              const otherUser = roomData.users.find((uid: string) => uid !== currentUid);
+              if (otherUser) {
+                 console.log(`[${currentUid}] Found other user: ${otherUser}. Setting remoteUserId and isCaller=false.`);
+                 setRemoteUserId(otherUser);
+                 setIsCaller(false); 
+                 console.log(`[${currentUid}] User is callee, state is 'connecting'. Setting up local stream.`);
+                 await webrtcSetupLocalStreamHook(); 
+              } else {
+                console.error(`[${currentUid}] ERROR (CALLEE): Other user not found in roomData for room ${userStatus.roomId}. Users: ${roomData.users}. My ID: ${currentUid}`);
+                toast({ title: "Matching Error", description: "Could not identify chat partner.", variant: "destructive" });
+                if (chatStateRef.current !== 'idle') await handleStopChat(false);
+              }
             } else {
-              console.error(`[${currentUid}] ERROR: Other user not found in roomData for room ${userStatus.roomId}. Users: ${roomData.users}. My ID: ${currentUid}`);
-              toast({ title: "Matching Error", description: "Could not identify chat partner.", variant: "destructive" });
+              console.error(`[${currentUid}] ERROR (CALLEE): Room data not found for room ${userStatus.roomId} or users array missing.`);
+              toast({ title: "Room Error", description: "Could not retrieve room information.", variant: "destructive" });
               if (chatStateRef.current !== 'idle') await handleStopChat(false);
             }
+          } else if (chatStateRef.current === 'connecting' && roomIdRef.current === userStatus.roomId) {
+             // CALLER PATH (confirmation) or CALLEE already processing this room.
+             console.log(`[${currentUid}] STATUS LISTENER: Status 'chatting' for current room ${userStatus.roomId} while 'connecting'. This is expected for caller or already handled for callee.`);
+             // If this is the caller, their status was set to 'chatting' by createRoom, and this is just a confirmation.
+             // No specific state change needed here if already 'connecting' to this room.
+          } else if (roomIdRef.current && roomIdRef.current !== userStatus.roomId && userStatus.status === 'chatting'){
+            // This user was in a different room, and now is being assigned to a new room while status is 'chatting'
+            // This is a complex scenario, likely after a rapid "Next Chat" or a direct reassignment.
+            // Best to stop current activities and then process the new room.
+            console.warn(`[${currentUid}] STATUS LISTENER: Assigned to new chat room ${userStatus.roomId} while already in/associated with room ${roomIdRef.current}. Chat state ${chatStateRef.current}. Forcing stop of old, then processing new.`);
+            await handleStopChat(false); // Clean up client for the old room
+            // After handleStopChat, state should be 'idle'. The next status update or a new search will handle the new room.
+            // To be safer, we could re-trigger processing for the new room if state is now idle.
+            // For now, rely on the next status update or search to pick up the new room.
           } else {
-            console.error(`[${currentUid}] ERROR: Room data not found for room ${userStatus.roomId} or users array missing.`);
-            toast({ title: "Room Error", description: "Could not retrieve room information.", variant: "destructive" });
-            if (chatStateRef.current !== 'idle') await handleStopChat(false);
+             console.log(`[${currentUid}] STATUS LISTENER: Received 'chatting' status for room ${userStatus.roomId}, but not in 'searching' state or room ID matches current. Current chatState: ${chatStateRef.current}, current roomId: ${roomIdRef.current}`);
           }
+
         } else if (userStatus && userStatus.status === 'idle' && roomIdRef.current) {
           console.log(`[${currentUid}] STATUS LISTENER: User status in Firestore is 'idle', but client was in room ${roomIdRef.current}. Cleaning up client-side.`);
           if (chatStateRef.current !== 'idle') { 
              await handleStopChat(false);
           }
         } else if (userStatus && userStatus.status === 'searching' && roomIdRef.current && (chatStateRef.current === 'chatting' || chatStateRef.current === 'connecting')) {
-            console.warn(`[${currentUid}] STATUS LISTENER: User status is 'searching' but client believes it's in a room/connecting. Discrepancy. Cleaning up.`);
+            console.warn(`[${currentUid}] STATUS LISTENER: User status is 'searching' (Firestore) but client believes it's in a room/connecting. Discrepancy (likely other user stopped). Cleaning up.`);
             if (chatStateRef.current !== 'idle') await handleStopChat(false);
         } else {
           console.log(`[${currentUid}] STATUS LISTENER: No specific action taken for status: ${userStatus?.status}, roomId: ${userStatus?.roomId}. My refs: roomIdRef=${roomIdRef.current}, chatStateRef=${chatStateRef.current}`);
@@ -367,7 +378,7 @@ export default function ChatApp() {
       };
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firebaseUser?.uid /* handleStopChat and webrtcSetupLocalStreamHook are stable due to useCallback */]); 
+  }, [firebaseUser?.uid]); 
 
 
   if (!firebaseUser) {
@@ -485,3 +496,4 @@ export default function ChatApp() {
   );
 }
     
+
