@@ -6,12 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { VideoArea } from './video-area';
 import { MessageItem } from './message-item';
 import { ReportDialog } from './report-dialog';
 import { useFirebaseAuth } from './firebase-auth-provider';
 import type { ChatMessage, ChatState, ReportData, UserStatusData } from '@/types';
-import { Send, Loader2, MessageSquare, Search, XCircle, Languages, RotateCcw } from 'lucide-react';
+import { Send, Loader2, MessageSquare, Search, XCircle, Languages, RotateCcw, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { moderateText, type ModerateTextInput } from '@/ai/flows/ai-moderation';
 import { translateMessage, type TranslateMessageInput } from '@/ai/flows/real-time-translation';
@@ -33,6 +34,7 @@ export default function ChatApp() {
   const [roomId, setRoomId] = useState<string | null>(null);
   const [remoteUserId, setRemoteUserId] = useState<string | null>(null);
   const [isCaller, setIsCaller] = useState(false);
+  const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -46,8 +48,7 @@ export default function ChatApp() {
   useEffect(() => {
     chatStateRef.current = chatState;
     roomIdRef.current = roomId;
-    // console.log(`[${firebaseUser?.uid}] Refs updated: chatStateRef=${chatStateRef.current}, roomIdRef=${roomIdRef.current}`);
-  }, [chatState, roomId, firebaseUser?.uid]);
+  }, [chatState, roomId]);
 
   const { 
     startCall: webrtcStartCall, 
@@ -95,6 +96,23 @@ export default function ChatApp() {
     }
   }, [roomId, chatState, firebaseUser?.uid]);
 
+  useEffect(() => {
+    const fetchCount = async () => {
+      try {
+        const count = await FirestoreService.getActiveUserCount();
+        setActiveUserCount(count);
+      } catch (error) {
+        console.error("Failed to fetch active user count:", error);
+        setActiveUserCount(null); // Or 0, or keep previous
+      }
+    };
+
+    fetchCount(); // Initial fetch
+    const intervalId = setInterval(fetchCount, 30000); // Fetch every 30 seconds
+
+    return () => clearInterval(intervalId); // Cleanup on unmount
+  }, []);
+
 
   const handleStartSearch = async () => {
     if (!firebaseUser) {
@@ -131,7 +149,7 @@ export default function ChatApp() {
           matchedUser = await FirestoreService.findMatch(firebaseUser.uid); 
       }
       
-      if (matchedUser && matchedUser.userId !== firebaseUser.uid) { // Match Found!
+      if (matchedUser && matchedUser.userId !== firebaseUser.uid) { 
         console.log(`[${firebaseUser.uid}] Match found: ${matchedUser.userId}, with keywords:`, matchedUser.keywords);
         setRemoteUserId(matchedUser.userId);
         
@@ -144,9 +162,9 @@ export default function ChatApp() {
         setChatState('connecting'); 
         console.log(`[${firebaseUser.uid}] Chat state set to connecting. Setting up local stream.`);
         await webrtcSetupLocalStreamHook(); 
-      } else { // No immediate match found
+      } else { 
         console.log(`[${firebaseUser.uid}] No immediate match found. Updating self to 'searching' to be discoverable with keywords:`, searchKeywords);
-        await FirestoreService.updateUserStatus(firebaseUser.uid, 'searching', searchKeywords, null); // Set self to searching
+        await FirestoreService.updateUserStatus(firebaseUser.uid, 'searching', searchKeywords, null); 
 
         if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
         searchTimeoutRef.current = setTimeout(async () => {
@@ -300,25 +318,21 @@ export default function ChatApp() {
 
         console.log(`[${currentUid}] RAW USER STATUS UPDATE RECEIVED:`, JSON.stringify(userStatus));
         console.log(`[${currentUid}] Current refs BEFORE processing status: roomIdRef=${roomIdRef.current}, chatStateRef=${chatStateRef.current}`);
+        
+        if (searchTimeoutRef.current && userStatus && userStatus.status === 'chatting') {
+          console.log(`[${currentUid}] User status changed to 'chatting', clearing search timeout.`);
+          clearTimeout(searchTimeoutRef.current);
+          searchTimeoutRef.current = null;
+        }
 
         if (userStatus && userStatus.status === 'chatting' && userStatus.roomId) {
-           // This user is being put into a 'chatting' state by Firestore.
-           // This typically means they are the CALLEE or it's a confirmation for the CALLER.
-           
            const isNewOrDifferentRoomForMe = !roomIdRef.current || roomIdRef.current !== userStatus.roomId;
 
-           // If Firestore says I'm 'chatting' in a room, and this is a new room assignment for me (or I was searching/idle)
            if (isNewOrDifferentRoomForMe && (chatStateRef.current === 'searching' || chatStateRef.current === 'idle')) {
             console.log(`[${currentUid}] STATUS LISTENER (CALLEE PATH from ${chatStateRef.current}): Transitioning to 'connecting'. New Room: ${userStatus.roomId}`);
             
-            if (searchTimeoutRef.current) { // Clear search timeout as we are being matched
-              clearTimeout(searchTimeoutRef.current);
-              searchTimeoutRef.current = null;
-              console.log(`[${currentUid}] Cleared search timeout because matched as callee into room ${userStatus.roomId}.`);
-            }
-            
-            setRoomId(userStatus.roomId); // This will update roomIdRef via its own useEffect
-            setChatState('connecting'); // This will update chatStateRef via its own useEffect
+            setRoomId(userStatus.roomId); 
+            setChatState('connecting'); 
 
             const roomData = await FirestoreService.getRoomData(userStatus.roomId);
             if (roomData && roomData.users) {
@@ -341,17 +355,10 @@ export default function ChatApp() {
               if (chatStateRef.current !== 'idle') await handleStopChat(false);
             }
           } else if (chatStateRef.current === 'connecting' && roomIdRef.current === userStatus.roomId) {
-             // CALLER PATH (confirmation) or CALLEE already processing this room.
              console.log(`[${currentUid}] STATUS LISTENER: Status 'chatting' for current room ${userStatus.roomId} while 'connecting'. This is expected for caller or already handled for callee.`);
-             if (searchTimeoutRef.current) { // Also clear search timeout for caller if it was somehow active
-                clearTimeout(searchTimeoutRef.current);
-                searchTimeoutRef.current = null;
-                console.log(`[${currentUid}] Cleared search timeout for caller in 'connecting' state for room ${userStatus.roomId}.`);
-             }
           } else if (isNewOrDifferentRoomForMe && userStatus.status === 'chatting' && chatStateRef.current === 'connecting') {
-             // Rapid "Next Chat" scenario: was connecting to old room, now assigned to new one.
              console.warn(`[${currentUid}] STATUS LISTENER: Assigned to new chat room ${userStatus.roomId} while 'connecting' to old room ${roomIdRef.current}. Forcing stop of old, then will re-process new.`);
-             await handleStopChat(false); // This will set state to 'idle'. The onSnapshot should fire again for the new room.
+             await handleStopChat(false); 
           } else {
              console.log(`[${currentUid}] STATUS LISTENER: Received 'chatting' status for room ${userStatus.roomId}, but conditions not met for main callee/caller paths. isNewOrDifferentRoom: ${isNewOrDifferentRoomForMe}, ChatState: ${chatStateRef.current}, RoomId: ${roomIdRef.current}`);
           }
@@ -374,14 +381,14 @@ export default function ChatApp() {
       return () => {
         console.log(`[${firebaseUser?.uid}] Unsubscribing from user status listener for: ${firebaseUser.uid}`);
         unsubscribe();
-        if (searchTimeoutRef.current) { // Ensure cleanup on unmount/re-subscribe
+        if (searchTimeoutRef.current) { 
             clearTimeout(searchTimeoutRef.current);
             searchTimeoutRef.current = null;
         }
       };
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firebaseUser?.uid]); // Kept minimal dependencies to avoid re-subscribing too often. handleStopChat and webrtcSetupLocalStreamHook are stable.
+  }, [firebaseUser?.uid]); 
 
 
   if (!firebaseUser) {
@@ -397,8 +404,14 @@ export default function ChatApp() {
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
-      <header className="p-4 border-b border-border shadow-sm bg-card">
+      <header className="p-4 border-b border-border shadow-sm bg-card flex justify-between items-center">
         <h1 className="text-2xl font-semibold text-primary">Chatter Anon</h1>
+        {activeUserCount !== null && (
+          <Badge variant="secondary" className="text-sm">
+            <Users className="mr-2 h-4 w-4" />
+            {activeUserCount} Active Users
+          </Badge>
+        )}
       </header>
 
       <main className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">

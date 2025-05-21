@@ -2,7 +2,7 @@
 import { db } from './firebase';
 import { 
   collection, addDoc, query, where, getDocs, doc, updateDoc, onSnapshot, 
-  serverTimestamp, limit, orderBy, setDoc, getDoc, writeBatch, type QuerySnapshot, type DocumentData, type QueryDocumentSnapshot, Timestamp, startAfter 
+  serverTimestamp, limit, orderBy, setDoc, getDoc, writeBatch, type QuerySnapshot, type DocumentData, type QueryDocumentSnapshot, Timestamp, startAfter, getCountFromServer 
 } from 'firebase/firestore';
 import type { ChatMessage, ReportData, UserStatusData, RoomData, SignalData, SignalPayload } from '@/types';
 
@@ -13,8 +13,9 @@ export async function updateUserStatus(userId: string, status: UserStatusData['s
   console.log(`[FirestoreService][${currentTimestamp.toMillis()}] updateUserStatus for ${userId}: status=${status}, roomId=${roomId === undefined ? 'not specified' : roomId}, keywords=${keywords?.join(',')}`);
   const userStatusRef = doc(db, 'userStatuses', userId);
   const data: Partial<UserStatusData> = {
+    userId, // Ensure userId is part of the data being set/merged
     status,
-    lastSeen: serverTimestamp(), // Firestore server timestamp for accuracy
+    lastSeen: serverTimestamp(), 
   };
   if (keywords !== undefined) data.keywords = keywords;
   if (roomId !== undefined) data.roomId = roomId; 
@@ -34,17 +35,16 @@ export async function findMatch(currentUserId: string, searchKeywords?: string[]
   console.log(`[FirestoreService][${currentTimestamp.toMillis()}] findMatch called for ${currentUserId} with keywords:`, searchKeywords);
   let q;
   const usersRef = collection(db, "userStatuses");
-  // Consider users active in the last 2 minutes for matching to avoid matching with stale entries
-  const twoMinutesAgo = Timestamp.fromDate(new Date(Date.now() - 2 * 60 * 1000));
+  const fiveMinutesAgo = Timestamp.fromDate(new Date(Date.now() - 5 * 60 * 1000));
 
   if (searchKeywords && searchKeywords.length > 0) {
     console.log(`[FirestoreService][${currentTimestamp.toMillis()}] Searching with keywords: ${searchKeywords.slice(0,10).join(', ')} for user ${currentUserId}`);
     q = query(
       usersRef,
       where("status", "==", "searching"),
-      where("userId", "!=", currentUserId), // Don't match with self
+      where("userId", "!=", currentUserId), 
       where("keywords", "array-contains-any", searchKeywords.slice(0,10)), 
-      where("lastSeen", ">", twoMinutesAgo), 
+      where("lastSeen", ">", fiveMinutesAgo), 
       orderBy("lastSeen", "asc"),
       limit(10) 
     );
@@ -54,7 +54,7 @@ export async function findMatch(currentUserId: string, searchKeywords?: string[]
       usersRef,
       where("status", "==", "searching"),
       where("userId", "!=", currentUserId),
-      where("lastSeen", ">", twoMinutesAgo),
+      where("lastSeen", ">", fiveMinutesAgo),
       orderBy("lastSeen", "asc"),
       limit(1)
     );
@@ -63,7 +63,7 @@ export async function findMatch(currentUserId: string, searchKeywords?: string[]
   try {
     const querySnapshot = await getDocs(q);
     if (!querySnapshot.empty) {
-      const matchedDoc = querySnapshot.docs[0]; // Prioritize the one waiting longest
+      const matchedDoc = querySnapshot.docs[0]; 
       console.log(`[FirestoreService][${currentTimestamp.toMillis()}] Match found for ${currentUserId}: ${matchedDoc.id}`, matchedDoc.data());
       return { userId: matchedDoc.id, ...matchedDoc.data() } as UserStatusData;
     }
@@ -72,6 +72,22 @@ export async function findMatch(currentUserId: string, searchKeywords?: string[]
   } catch (error) {
     console.error(`[FirestoreService][${currentTimestamp.toMillis()}] Error in findMatch for ${currentUserId}:`, error);
     return null;
+  }
+}
+
+export async function getActiveUserCount(): Promise<number> {
+  const fiveMinutesAgo = Timestamp.fromDate(new Date(Date.now() - 5 * 60 * 1000));
+  const usersRef = collection(db, "userStatuses");
+  const q = query(
+    usersRef,
+    where("lastSeen", ">", fiveMinutesAgo)
+  );
+  try {
+    const snapshot = await getCountFromServer(q);
+    return snapshot.data().count;
+  } catch (error) {
+    console.error("Error fetching active user count:", error);
+    return 0; // Return 0 in case of an error
   }
 }
 
@@ -129,22 +145,18 @@ export async function cleanupRoom(roomId: string, currentUserId: string): Promis
   const batch = writeBatch(db);
 
   try {
-    const roomData = await getRoomData(roomId); // This already logs
+    const roomData = await getRoomData(roomId); 
     if (roomData) {
-      // Update status for all users in the room to idle
       roomData.users.forEach(userId => {
         const userStatusRef = doc(db, 'userStatuses', userId);
         batch.update(userStatusRef, { status: 'idle', roomId: null, keywords: [] });
         console.log(`[FirestoreService][${currentTimestamp.toMillis()}] cleanupRoom: Queued update for ${userId} to idle.`);
       });
-      // Mark room as closed
       batch.update(roomRef, { status: 'closed', endedAt: serverTimestamp() });
       console.log(`[FirestoreService][${currentTimestamp.toMillis()}] cleanupRoom: Queued update for room ${roomId} to closed.`);
     } else {
         console.log(`[FirestoreService][${currentTimestamp.toMillis()}] cleanupRoom: Room ${roomId} not found. Only updating initiating user ${currentUserId} status if they were not idle.`);
-        // If room doesn't exist, at least update the current user if they thought they were in a room.
         const currentUserStatusRef = doc(db, 'userStatuses', currentUserId);
-        // Fetch current status to avoid unnecessary write if already idle
         const currentUserStatusSnap = await getDoc(currentUserStatusRef);
         if(currentUserStatusSnap.exists() && currentUserStatusSnap.data().status !== 'idle') {
             batch.update(currentUserStatusRef, { status: 'idle', roomId: null, keywords: [] });
@@ -154,7 +166,6 @@ export async function cleanupRoom(roomId: string, currentUserId: string): Promis
     console.log(`[FirestoreService][${currentTimestamp.toMillis()}] cleanupRoom: Batch committed for room ${roomId}.`);
   } catch (error) {
     console.error(`[FirestoreService][${currentTimestamp.toMillis()}] Error cleaning up room ${roomId}:`, error);
-    // Fallback: try to update current user's status at least
     const currentUserStatusRef = doc(db, 'userStatuses', currentUserId);
     await updateUserStatus(currentUserId, 'idle', [], null).catch(err => console.error("Fallback user status update failed:", err));
   }
@@ -181,11 +192,10 @@ export function listenForSignals(roomId: string, currentUserId: string, callback
   console.log(`[FirestoreService][${listenStartMs}] listenForSignals setup for user ${currentUserId} in room ${roomId}`);
   const signalsCollection = collection(db, `rooms/${roomId}/signals`);
   
-  // Only listen for signals created after this listener was initialized.
   const q = query(
     signalsCollection, 
     where("receiverId", "==", currentUserId),
-    where("timestamp", ">", Timestamp.fromMillis(listenStartMs)), // Query for newer signals
+    where("timestamp", ">", Timestamp.fromMillis(listenStartMs)), 
     orderBy("timestamp", "asc") 
   );
   
@@ -235,15 +245,11 @@ export function listenForMessages(
     snapshot.docChanges().forEach((change) => {
         if (change.type === "added") {
             const data = change.doc.data();
-            // Filter messages that are newer than when the listener started, if desired, though 'added' should handle this for new messages.
-            // const messageTimestamp = (data.timestamp as Timestamp)?.toMillis();
-            // if (!messageTimestamp || messageTimestamp >= listenStartMs) {
               newMessages.push({
                   id: change.doc.id,
                   ...data,
                   timestamp: (data.timestamp as Timestamp)?.toDate() || new Date(),
               } as ChatMessage);
-            // }
         }
     });
 
