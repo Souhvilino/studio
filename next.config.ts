@@ -11,8 +11,8 @@ try {
     console.warn(`[next.config.js] Warning: Explicitly loading .env from ${envPath} failed or file not found. Relying on Next.js built-in .env handling. Error:`, result.error.message);
   } else if (result.parsed) {
     console.log(`[next.config.js] Successfully loaded environment variables from ${envPath}`);
-    // Optionally log loaded vars to confirm, but be careful with sensitive data in logs
-    // console.log('[next.config.js] Loaded vars:', Object.keys(result.parsed));
+    // Log the keys of the variables parsed by dotenv
+    console.log('[next.config.js] Keys loaded by dotenv:', Object.keys(result.parsed));
   } else {
     console.warn(`[next.config.js] dotenv.config() did not parse any variables from ${envPath}. File might be empty or unreadable.`);
   }
