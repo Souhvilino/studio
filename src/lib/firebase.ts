@@ -49,20 +49,22 @@ console.log(
 // More stringent check for API key and Project ID validity before attempting to initialize Firebase
 if (
   !firebaseConfig.apiKey ||
+  typeof firebaseConfig.apiKey !== 'string' || // Ensure it's a string
   firebaseConfig.apiKey.trim() === "" ||
-  firebaseConfig.apiKey.includes("YOUR_API_KEY") ||
-  firebaseConfig.apiKey === "YOUR_API_KEY_HERE" || // Explicit check for the exact placeholder
+  firebaseConfig.apiKey.includes("YOUR_API_KEY") || // Check for common placeholder text
+  firebaseConfig.apiKey === "YOUR_API_KEY_HERE" ||
   !firebaseConfig.projectId ||
+  typeof firebaseConfig.projectId !== 'string' || // Ensure it's a string
   firebaseConfig.projectId.trim() === "" ||
-  firebaseConfig.projectId.includes("YOUR_PROJECT_ID") ||
+  firebaseConfig.projectId.includes("YOUR_PROJECT_ID") || // Check for common placeholder text
   firebaseConfig.projectId === "YOUR_PROJECT_ID_HERE"
 ) {
   const errorMessage =
-    "CRITICAL_FIREBASE_CONFIG_ERROR: Firebase API Key or Project ID is MISSING or uses PLACEHOLDERS in src/lib/firebase.ts. " +
-    "This means the environment variables (NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_PROJECT_ID) were 'undefined' or placeholders when read from 'process.env'. " +
-    "Refer to the SERVER CONSOLE LOGS above this message to see the 'RAW process.env...' values. " +
+    "CRITICAL_FIREBASE_CONFIG_ERROR: Firebase API Key or Project ID is MISSING, not a string, empty, or uses PLACEHOLDERS in src/lib/firebase.ts. " +
+    "This means the environment variables (NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_PROJECT_ID) were 'undefined', not strings, or placeholders when read from 'process.env'. " +
+    "Refer to the SERVER CONSOLE LOGS (especially from next.config.js and above this message) to see the 'RAW process.env...' values and dotenv loading status. " +
     "Ensure your /workspace/.env file is correctly named, located at the project root, contains your ACTUAL Firebase credentials (NO placeholders), and that you RESTARTED the Next.js server (Ctrl+C, then 'npm run dev'). " +
-    `Problematic apiKey from process.env: '${rawApiKey}', Problematic projectId from process.env: '${rawProjectId}'. ` +
+    `Problematic apiKey from process.env: '${rawApiKey}' (type: ${typeof rawApiKey}), Problematic projectId from process.env: '${rawProjectId}' (type: ${typeof rawProjectId}). ` +
     "The application cannot start without valid Firebase configuration.";
   console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
   console.error(errorMessage);
@@ -71,7 +73,7 @@ if (
   throw new Error(errorMessage);
 } else {
   console.log("--------------------------------------------------------------------------------");
-  console.log("Firebase Lib: Firebase config pre-check PASSED. API Key and Project ID appear to be validly formatted strings.");
+  console.log("Firebase Lib: Firebase config pre-check PASSED in src/lib/firebase.ts. API Key and Project ID appear to be validly formatted strings.");
   console.log("Proceeding with Firebase initialization...");
   console.log("================================================================================");
 }
