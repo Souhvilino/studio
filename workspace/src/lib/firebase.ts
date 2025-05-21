@@ -1,4 +1,5 @@
 
+// Firebase App (the core Firebase SDK) is always required and must be listed first
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
@@ -33,18 +34,18 @@ const firebaseConfig = {
 };
 
 console.log(
-  "Firebase Config object constructed in src/lib/firebase.ts:", firebaseConfig
+  "Firebase Config object constructed in /workspace/src/lib/firebase.ts:", firebaseConfig
 );
 
 if (
   !firebaseConfig.apiKey ||
   firebaseConfig.apiKey.trim() === "" ||
-  firebaseConfig.apiKey.includes("YOUR_API_KEY") ||
-  firebaseConfig.apiKey === "YOUR_API_KEY_HERE" ||
+  firebaseConfig.apiKey.includes("YOUR_API_KEY") || // General placeholder check
+  firebaseConfig.apiKey === "YOUR_API_KEY_HERE" || // Exact placeholder check
   !firebaseConfig.projectId ||
   firebaseConfig.projectId.trim() === "" ||
-  firebaseConfig.projectId.includes("YOUR_PROJECT_ID") ||
-  firebaseConfig.projectId === "YOUR_PROJECT_ID_HERE"
+  firebaseConfig.projectId.includes("YOUR_PROJECT_ID") || // General placeholder check
+  firebaseConfig.projectId === "YOUR_PROJECT_ID_HERE" // Exact placeholder check
 ) {
   const errorMessage =
     "CRITICAL_FIREBASE_CONFIG_ERROR: Firebase API Key or Project ID is missing, empty, or appears to be a placeholder. " +
@@ -52,10 +53,12 @@ if (
     "Please ensure your .env file at the project root (/workspace/.env) is correctly populated with your ACTUAL Firebase project credentials. " +
     "All NEXT_PUBLIC_FIREBASE_... variables are required. " +
     "After updating the .env file, YOU MUST RESTART the Next.js development server (Ctrl+C, then npm run dev). " +
-    `Current (potentially problematic) apiKey in constructed config: '${firebaseConfig.apiKey}', projectId: '${firebaseConfig.projectId}'. ` +
+    `Current (potentially problematic) apiKey: '${firebaseConfig.apiKey}', projectId: '${firebaseConfig.projectId}'. ` +
     "The application cannot start without valid Firebase configuration.";
-  console.error(errorMessage);
-  throw new Error(errorMessage);
+  // console.error(errorMessage); // User requested to skip this error
+  // This will stop execution before Firebase attempts to initialize with bad config, providing a clearer error source.
+  // throw new Error(errorMessage); // User requested to skip this error
+  console.warn("WARNING: Firebase configuration check bypassed. API Key or Project ID might be missing or invalid. App functionality will likely be impaired.");
 }
 
 let app: FirebaseApp;
@@ -72,7 +75,7 @@ try {
   const initErrorMessage = `Firebase core app initialization (initializeApp) failed: ${
     error instanceof Error ? error.message : String(error)
   }. This usually means the firebaseConfig object itself is malformed or missing critical fields NOT caught by the pre-check (e.g. authDomain, storageBucket if they are truly invalid). Double-check all NEXT_PUBLIC_FIREBASE_... variables in your /workspace/.env file and ensure the server was restarted.`;
-  console.error("Error during Firebase app initialization in src/lib/firebase.ts:", error);
+  console.error("Error during Firebase app initialization in /workspace/src/lib/firebase.ts:", error);
   console.error(initErrorMessage);
   throw new Error(initErrorMessage);
 }
@@ -83,7 +86,7 @@ try {
   const authErrorMessage = `Firebase Auth setup (getAuth) failed: ${
     error instanceof Error ? error.message : String(error)
   }. This specific error ('${error instanceof Error && (error as any).code ? (error as any).code : 'unknown'}') often points directly to an invalid 'apiKey' or 'authDomain' in your Firebase configuration. Verify these in /workspace/.env and restart the server.`;
-  console.error("Error getting Firebase Auth instance in src/lib/firebase.ts:", error);
+  console.error("Error getting Firebase Auth instance in /workspace/src/lib/firebase.ts:", error);
   console.error(authErrorMessage);
   throw new Error(authErrorMessage);
 }
@@ -94,7 +97,7 @@ try {
   const firestoreErrorMessage = `Firestore setup (getFirestore) failed: ${
     error instanceof Error ? error.message : String(error)
   }. This could be due to issues with the 'projectId', database rules, or the Firestore service not being enabled for your project. Check your Firebase console and /workspace/.env file for the 'NEXT_PUBLIC_FIREBASE_PROJECT_ID'. Restart the server after any .env changes.`;
-  console.error("Error getting Firestore instance in src/lib/firebase.ts:", error);
+  console.error("Error getting Firestore instance in /workspace/src/lib/firebase.ts:", error);
   console.error(firestoreErrorMessage);
   throw new Error(firestoreErrorMessage);
 }

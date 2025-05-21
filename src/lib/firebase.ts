@@ -6,16 +6,34 @@ import { getFirestore, type Firestore } from "firebase/firestore";
 // import { getStorage, FirebaseStorage } from "firebase/storage"; // If vision API needs direct upload
 
 // **VERY IMPORTANT: CHECK YOUR SERVER CONSOLE FOR THIS LOG!**
-console.log(
-  "Firebase Lib Init: Reading Environment Variables from process.env:",
-  `NEXT_PUBLIC_FIREBASE_API_KEY: >>>${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}<<<`,
-  `NEXT_PUBLIC_FIREBASE_PROJECT_ID: >>>${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}<<<`,
-  `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}`,
-  `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}`,
-  `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}`,
-  `NEXT_PUBLIC_FIREBASE_APP_ID: ${process.env.NEXT_PUBLIC_FIREBASE_APP_ID}`,
-  `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID}`
-);
+// console.log(
+//   "Firebase Lib Init: Reading Environment Variables from process.env:",
+//   `NEXT_PUBLIC_FIREBASE_API_KEY: >>>${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}<<<`,
+//   `NEXT_PUBLIC_FIREBASE_PROJECT_ID: >>>${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}<<<`,
+//   `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}`,
+//   `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}`,
+//   `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}`,
+//   `NEXT_PUBLIC_FIREBASE_APP_ID: ${process.env.NEXT_PUBLIC_FIREBASE_APP_ID}`,
+//   `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID}`
+// );
+// Replaced by more detailed logging block below
+
+console.log("================================================================================");
+console.log("Firebase Lib Init: ATTEMPTING TO READ FIREBASE ENVIRONMENT VARIABLES (from src/lib/firebase.ts)");
+console.log("--------------------------------------------------------------------------------");
+console.log(`RAW process.env.NEXT_PUBLIC_FIREBASE_API_KEY:         >>>${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}<<<`);
+console.log(`RAW process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:     >>>${process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}<<<`);
+console.log(`RAW process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID:      >>>${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}<<<`);
+console.log(`RAW process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET:  >>>${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}<<<`);
+console.log(`RAW process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: >>>${process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}<<<`);
+console.log(`RAW process.env.NEXT_PUBLIC_FIREBASE_APP_ID:          >>>${process.env.NEXT_PUBLIC_FIREBASE_APP_ID}<<<`);
+console.log(`RAW process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID:  >>>${process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID}<<<`);
+console.log("--------------------------------------------------------------------------------");
+console.log("If any of the >>>...<<< values above are 'undefined' or show placeholders,");
+console.log("your .env file at /workspace/.env is NOT being loaded correctly or is misconfigured.");
+console.log("YOU MUST RESTART the Next.js dev server after fixing .env!");
+console.log("================================================================================");
+
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -45,9 +63,10 @@ if (
     "After updating the .env file, YOU MUST RESTART the Next.js development server. " +
     `Current (potentially problematic) apiKey: '${firebaseConfig.apiKey}', projectId: '${firebaseConfig.projectId}'. ` +
     "The application cannot start without valid Firebase configuration.";
-  console.error(errorMessage);
+  // console.error(errorMessage); // User requested to skip this error
   // This will stop execution before Firebase attempts to initialize with bad config, providing a clearer error source.
-  throw new Error(errorMessage);
+  // throw new Error(errorMessage); // User requested to skip this error
+  console.warn("WARNING: Firebase configuration check bypassed in src/lib/firebase.ts. API Key or Project ID might be missing or invalid. App functionality will likely be impaired.");
 }
 
 let app: FirebaseApp;
