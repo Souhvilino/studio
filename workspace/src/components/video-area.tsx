@@ -2,7 +2,6 @@
 "use client";
 
 import React, { useEffect, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/card'; // Card is no longer used for the main video wrapper
 import { User, VideoOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -52,8 +51,8 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
     // Main container: Enforce aspect-video on mobile, let grid define on desktop.
     <div className="relative w-full aspect-video md:grid md:grid-cols-2 md:gap-4 md:aspect-auto">
       
-      {/* Remote Video: Main view on mobile, right grid cell on desktop. */}
-      <div className="w-full h-full bg-black overflow-hidden md:rounded-lg md:shadow-lg">
+      {/* Remote Video (Partner's Video) - Should be main view on mobile, right grid cell on desktop */}
+      <div className="w-full h-full bg-black overflow-hidden md:rounded-lg md:shadow-lg md:aspect-video">
         {(isChatting && remoteStream) ? (
           <video
             ref={remoteVideoRef}
@@ -69,14 +68,14 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
         )}
       </div>
 
-      {/* Local Video: PiP on mobile, left grid cell on desktop. */}
+      {/* Local Video (Your Video - PiP on mobile, left grid cell on desktop) */}
       <div className={cn(
-        "overflow-hidden bg-black", // Base styles for the PiP container
+        "overflow-hidden bg-black", 
         // Mobile PiP styles (default)
         "absolute top-3 right-3 w-24 aspect-[4/3] z-20 border-2 border-white rounded-md",
-        "sm:w-28", // Slightly larger PiP on sm screens
+        "sm:w-28", 
         // Desktop: normal flow in grid (order-first makes it appear on the left in LTR grid)
-        "md:order-first md:relative md:static md:w-full md:h-full md:aspect-auto md:top-auto md:right-auto md:z-auto md:border-0 md:rounded-lg md:shadow-lg"
+        "md:order-first md:relative md:static md:w-full md:aspect-video md:top-auto md:right-auto md:z-auto md:border-0 md:rounded-lg md:shadow-lg" // Enforce aspect-video for desktop too
       )}>
         {localStream ? (
           <video
