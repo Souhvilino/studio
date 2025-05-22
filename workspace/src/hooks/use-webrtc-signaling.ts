@@ -51,9 +51,8 @@ export function useWebRTCSignaling({
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       localStreamRef.current = stream;
       onLocalStream(stream);
-      console.log(`[WebRTC ${CUID_SHORT}] setupLocalStream: Local stream acquired: ID=${stream.id}, Tracks:`, stream.getTracks().map(t => t.kind));
+      console.log(`[WebRTC ${CUID_SHORT}] setupLocalStream: Local stream acquired: ID=${stream.id}, Tracks:`, stream.getTracks().map(t => `${t.kind}: ${t.label}(${t.id.substring(0,5)})`));
       
-      // If PC exists, add tracks from this new stream
       if (peerConnectionRef.current && peerConnectionRef.current.signalingState !== 'closed') {
         console.log(`[WebRTC ${CUID_SHORT}] setupLocalStream: PC exists, ensuring tracks are added.`);
         const pc = peerConnectionRef.current;
@@ -87,28 +86,26 @@ export function useWebRTCSignaling({
       return null;
     }
     
-    console.log(`[WebRTC ${CUID_SHORT}] createPeerConnection: Creating new PeerConnection`);
+    console.log(`[WebRTC ${CUID_SHORT}] createPeerConnection: Creating new PeerConnection for room ${roomId}`);
     const pc = new RTCPeerConnection(RTC_CONFIGURATION);
     peerConnectionRef.current = pc; 
 
     pc.onicecandidate = (event) => {
       if (event.candidate && roomId && currentUserId && remoteUserId) {
-        // console.log(`[WebRTC ${CUID_SHORT}] Sending ICE candidate:`, event.candidate.candidate.substring(0, 30) + "...");
         FirestoreService.sendSignal(roomId, currentUserId, remoteUserId, { type: 'candidate', candidate: event.candidate.toJSON() });
       }
     };
 
     pc.ontrack = (event) => {
-      console.log(`[WebRTC ${CUID_SHORT}] ONTRACK event received. Number of streams: ${event.streams.length}. Track kind: ${event.track.kind}`);
+      console.log(`[WebRTC ${CUID_SHORT}] ONTRACK event received. Number of streams: ${event.streams.length}. Track kind: ${event.track.kind}, muted: ${event.track.muted}, enabled: ${event.track.enabled}, readyState: ${event.track.readyState}`);
       event.streams.forEach((stream, index) => {
-        console.log(`[WebRTC ${CUID_SHORT}] Stream ${index}: ID=${stream.id}, Active=${stream.active}, Tracks:`, stream.getTracks().map(t => `${t.kind} (ID: ${t.id.substring(0,5)}, Label: ${t.label}, Enabled: ${t.enabled}, ReadyState: ${t.readyState})`));
+        console.log(`[WebRTC ${CUID_SHORT}] Remote Stream ${index} (ID: ${stream.id}): Active=${stream.active}, Tracks:`, stream.getTracks().map(t => `${t.kind} (ID: ${t.id.substring(0,5)}, Label: ${t.label}, Enabled: ${t.enabled}, Muted: ${t.muted}, ReadyState: ${t.readyState})`));
         stream.onaddtrack = (e) => console.log(`[WebRTC ${CUID_SHORT}] Track added to remote stream ${stream.id}: ${e.track.kind}`);
         stream.onremovetrack = (e) => console.log(`[WebRTC ${CUID_SHORT}] Track removed from remote stream ${stream.id}: ${e.track.kind}`);
       });
 
       if (event.streams && event.streams[0]) {
-        const remoteStream = event.streams[0];
-        onRemoteStream(remoteStream);
+        onRemoteStream(event.streams[0]);
       } else {
         console.warn(`[WebRTC ${CUID_SHORT}] ONTRACK event received, but no streams[0]. Event:`, event);
         onRemoteStream(null);
@@ -117,30 +114,25 @@ export function useWebRTCSignaling({
     
     pc.onnegotiationneeded = async () => {
       if (makingOffer.current || pc.signalingState !== 'stable' || isNegotiating) {
-        console.log(`[WebRTC ${CUID_SHORT}] onnegotiationneeded: SKIPPING, already making offer, not stable, or isNegotiating. State: ${pc.signalingState}, makingOffer: ${makingOffer.current}, isNegotiating: ${isNegotiating}`);
+        console.log(`[WebRTC ${CUID_SHORT}] onnegotiationneeded: SKIPPING, condition not met. State: ${pc.signalingState}, makingOffer: ${makingOffer.current}, isNegotiating: ${isNegotiating}`);
         return;
       }
       try {
         makingOffer.current = true;
         setIsNegotiating(true);
-        console.log(`[WebRTC ${CUID_SHORT}] onnegotiationneeded: Negotiation needed, creating offer...`);
+        console.log(`[WebRTC ${CUID_SHORT}] onnegotiationneeded: Negotiation needed, creating offer... Current PC Senders:`, pc.getSenders().map(s => `${s.track?.kind}(${s.track?.id.substring(0,5)})`));
         
-        if (localStreamRef.current) {
-          console.log(`[WebRTC ${CUID_SHORT}] onnegotiationneeded: Local tracks on PC before creating offer:`, pc.getSenders().map(s => `${s.track?.kind}(${s.track?.id.substring(0,5)})`));
-        }
-
         const offer = await pc.createOffer();
         if (pc.signalingState !== 'stable') { 
-             console.warn(`[WebRTC ${CUID_SHORT}] onnegotiationneeded: Signaling state changed to ${pc.signalingState} before setLocalDescription for offer. Aborting.`);
+             console.warn(`[WebRTC ${CUID_SHORT}] onnegotiationneeded: Signaling state changed to ${pc.signalingState} before setLocalDescription for offer. Aborting offer creation.`);
              makingOffer.current = false;
              setIsNegotiating(false);
              return;
         }
         await pc.setLocalDescription(offer);
-        // console.log(`[WebRTC ${CUID_SHORT}] Local description (offer) set. SDP:`, pc.localDescription?.sdp.substring(0,50) + "...");
         if (roomId && currentUserId && remoteUserId && pc.localDescription) {
            FirestoreService.sendSignal(roomId, currentUserId, remoteUserId, { type: 'offer', sdp: pc.localDescription.sdp });
-           console.log(`[WebRTC ${CUID_SHORT}] onnegotiationneeded: Offer sent to remote user.`);
+           console.log(`[WebRTC ${CUID_SHORT}] onnegotiationneeded: Offer sent.`);
         }
       } catch (err) {
         console.error(`[WebRTC ${CUID_SHORT}] onnegotiationneeded: Error during negotiation:`, err);
@@ -159,38 +151,40 @@ export function useWebRTCSignaling({
         console.log(`[WebRTC ${CUID_SHORT}] Signaling state changed to: ${pc.signalingState}`);
         if (pc.signalingState === 'stable') {
             ignoreOffer.current = false;
-            // makingOffer.current = false; // Be careful resetting makingOffer here, only if truly stable and not expecting an answer.
-            // setIsNegotiating(false); // Similarly, be cautious.
         }
     };
     
     if (localStreamRef.current) {
-        const stream = localStreamRef.current;
-        const audioTracks = stream.getAudioTracks();
-        if (audioTracks.length > 0) {
-            if (!pc.getSenders().find(s => s.track === audioTracks[0])) {
-                pc.addTrack(audioTracks[0], stream);
-                console.log(`[WebRTC ${CUID_SHORT}] createPeerConnection: Added audio track.`);
-            }
-        }
-        const videoTracks = stream.getVideoTracks();
-        if (videoTracks.length > 0) {
-            if (!pc.getSenders().find(s => s.track === videoTracks[0])) {
-                pc.addTrack(videoTracks[0], stream);
-                console.log(`[WebRTC ${CUID_SHORT}] createPeerConnection: Added video track.`);
-            }
-        }
+      const stream = localStreamRef.current;
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length > 0) {
+          if (!pc.getSenders().find(s => s.track === audioTracks[0])) {
+              pc.addTrack(audioTracks[0], stream);
+              console.log(`[WebRTC ${CUID_SHORT}] createPeerConnection: Added audio track explicitly.`);
+          }
+      } else {
+          console.log(`[WebRTC ${CUID_SHORT}] createPeerConnection: No local audio tracks to add.`);
+      }
+
+      const videoTracks = stream.getVideoTracks();
+      if (videoTracks.length > 0) {
+          if (!pc.getSenders().find(s => s.track === videoTracks[0])) {
+              pc.addTrack(videoTracks[0], stream);
+              console.log(`[WebRTC ${CUID_SHORT}] createPeerConnection: Added video track explicitly.`);
+          }
+      } else {
+          console.log(`[WebRTC ${CUID_SHORT}] createPeerConnection: No local video tracks to add.`);
+      }
     } else {
-        console.warn(`[WebRTC ${CUID_SHORT}] createPeerConnection: Local stream not available. Tracks won't be added yet.`);
+        console.warn(`[WebRTC ${CUID_SHORT}] createPeerConnection: Local stream not available when creating PC. Tracks won't be added yet.`);
     }
     return pc;
-  }, [roomId, currentUserId, remoteUserId, onRemoteStream, onConnectionStateChange, toast, CUID_SHORT, isNegotiating, setupLocalStream]);
+  }, [roomId, currentUserId, remoteUserId, onRemoteStream, onConnectionStateChange, CUID_SHORT, isNegotiating, setupLocalStream]);
 
 
   const startCall = useCallback(async (isCaller: boolean) => {
-    console.log(`[WebRTC ${CUID_SHORT}] startCall invoked. Is Caller: ${isCaller}`);
+    console.log(`[WebRTC ${CUID_SHORT}] startCall invoked. Is Caller: ${isCaller}. RoomID: ${roomId}, RemoteUID: ${remoteUserId}`);
     
-    // Ensure local stream is ready *before* proceeding with PC logic
     let stream = localStreamRef.current;
     if (!stream) {
         console.log(`[WebRTC ${CUID_SHORT}] startCall: Local stream not yet available, calling setupLocalStream.`);
@@ -214,32 +208,26 @@ export function useWebRTCSignaling({
     } else {
         console.log(`[WebRTC ${CUID_SHORT}] startCall: Existing PC found. State: ${pc.signalingState}`);
     }
-
-    // Ensure tracks are added using the explicit audio-then-video order
+    
     const audioTracks = stream.getAudioTracks();
     if (audioTracks.length > 0) {
         if (!pc.getSenders().find(s => s.track === audioTracks[0])) {
             pc.addTrack(audioTracks[0], stream);
-            console.log(`[WebRTC ${CUID_SHORT}] startCall: Added audio track.`);
+            console.log(`[WebRTC ${CUID_SHORT}] startCall: Added audio track explicitly.`);
         }
     }
     const videoTracks = stream.getVideoTracks();
     if (videoTracks.length > 0) {
         if (!pc.getSenders().find(s => s.track === videoTracks[0])) {
             pc.addTrack(videoTracks[0], stream);
-            console.log(`[WebRTC ${CUID_SHORT}] startCall: Added video track.`);
+            console.log(`[WebRTC ${CUID_SHORT}] startCall: Added video track explicitly.`);
         }
     }
     console.log(`[WebRTC ${CUID_SHORT}] startCall: Senders after ensuring tracks:`, pc.getSenders().map(s => `${s.track?.kind}(${s.track?.id.substring(0,5)})`));
     
-    // Offer creation logic moved primarily to onnegotiationneeded
-    // but if isCaller and stable, and negotiation doesn't fire, we might need to kickstart it.
     if (isCaller && pc.signalingState === 'stable' && !makingOffer.current && !isNegotiating) {
-        console.log(`[WebRTC ${CUID_SHORT}] startCall (Caller): PC is stable, explicitly triggering negotiation for offer.`);
-        // This will trigger pc.onnegotiationneeded if conditions within it are met
-        // Or, we can directly create offer here if onnegotiationneeded is unreliable.
-        // For now, rely on onnegotiationneeded being triggered by track additions or if it was pending.
-        // If onnegotiationneeded is problematic, a direct offer creation path here might be needed.
+        console.log(`[WebRTC ${CUID_SHORT}] startCall (Caller): PC is stable, explicitly triggering negotiation for offer via onnegotiationneeded.`);
+        // onnegotiationneeded should fire due to track additions or if it was already needed.
     }
 
   }, [setupLocalStream, createPeerConnection, onConnectionStateChange, CUID_SHORT, isNegotiating, roomId, currentUserId, remoteUserId]);
@@ -247,16 +235,15 @@ export function useWebRTCSignaling({
 
   useEffect(() => {
     if (!roomId || !remoteUserId || !currentUserId) {
-        // console.log(`[WebRTC ${CUID_SHORT}] Signaling listener useEffect: Not all IDs present, skipping.`, {roomId, remoteUserId, currentUserId});
         return;
     }
 
     let pcInstance = peerConnectionRef.current;
     if (!pcInstance || pcInstance.signalingState === 'closed') { 
-        console.log(`[WebRTC ${CUID_SHORT}] Signaling listener useEffect: PC is null or closed. Attempting to use existing or create.`);
-        pcInstance = createPeerConnection(); // This will set peerConnectionRef.current
+        console.log(`[WebRTC ${CUID_SHORT}] Signaling listener useEffect: PC is null or closed for room ${roomId}. Creating new PC.`);
+        pcInstance = createPeerConnection(); 
         if (!pcInstance) {
-          console.error(`[WebRTC ${CUID_SHORT}] Signaling listener useEffect: Failed to create PeerConnection. Aborting listener setup.`);
+          console.error(`[WebRTC ${CUID_SHORT}] Signaling listener useEffect: Failed to create PeerConnection for room ${roomId}. Aborting listener setup.`);
           return;
         }
     }
@@ -264,10 +251,9 @@ export function useWebRTCSignaling({
     console.log(`[WebRTC ${CUID_SHORT}] Setting up signal listener for room ${roomId}, listening for signals from ${remoteUserId}. PC State: ${pcInstance.signalingState}`);
     
     const unsubscribe = FirestoreService.listenForSignals(roomId, currentUserId, async (signal) => {
-      // Use the current ref inside async callback, as pcInstance from closure might be stale if PC was recreated
       const currentPC = peerConnectionRef.current; 
       if (!currentPC || currentPC.signalingState === 'closed') {
-          console.warn(`[WebRTC ${CUID_SHORT}] Received signal but PC is null or closed. Ignoring signal type: ${signal.type}`);
+          console.warn(`[WebRTC ${CUID_SHORT}] Received signal but PC is null or closed for room ${roomId}. Ignoring signal type: ${signal.type}`);
           return;
       }
       console.log(`[WebRTC ${CUID_SHORT}] Received signal: Type=${signal.type}, PC signaling state: ${currentPC.signalingState}, isNegotiating: ${isNegotiating}, makingOffer: ${makingOffer.current}, ignoreOffer: ${ignoreOffer.current}`);
@@ -275,85 +261,87 @@ export function useWebRTCSignaling({
       try {
         if (signal.type === 'offer') {
           if (makingOffer.current || currentPC.signalingState === 'have-local-offer' || ignoreOffer.current || isNegotiating) {
-            console.warn(`[WebRTC ${CUID_SHORT}] Offer received but in conflicting state. My ID: ${currentUserId}, Remote: ${remoteUserId}. Glare/Conflict handling.`);
-            if (currentUserId > remoteUserId && (makingOffer.current || currentPC.signalingState === 'have-local-offer')) {
-                console.log(`[WebRTC ${CUID_SHORT}] Glare: Ignoring incoming offer as my ID is larger and I'm making/made an offer.`);
+            console.warn(`[WebRTC ${CUID_SHORT} Callee] Offer received but in conflicting state. My ID: ${currentUserId}, Remote: ${remoteUserId}. Glare handling active.`);
+            if (makingOffer.current || (currentUserId && remoteUserId && currentUserId > remoteUserId && currentPC.signalingState === 'have-local-offer')) {
+                console.log(`[WebRTC ${CUID_SHORT} Callee] Glare: Ignoring incoming offer as my ID (${currentUserId}) is larger or I'm already making one. RemoteId: ${remoteUserId}`);
+                ignoreOffer.current = true; // Mark to ignore this offer
                 return; 
             }
-            // If not returning, this side will process the offer (e.g. lower ID)
-            // It might need to rollback its own offer if one was in flight.
+            // If not returning, this side will process the offer.
+            console.log(`[WebRTC ${CUID_SHORT} Callee] Glare: Proceeding to process offer despite conflicting state (my ID might be smaller or not making offer).`);
           }
           
           setIsNegotiating(true);
-          
+          ignoreOffer.current = true; // Prevents this client from making new offers while processing this one
+
           let streamForAnswer = localStreamRef.current;
           if (!streamForAnswer) {
             console.log(`[WebRTC ${CUID_SHORT} Callee] Offer received, local stream not ready. Setting up...`);
             streamForAnswer = await setupLocalStream();
           }
 
-          if (!streamForAnswer) {
-            console.error(`[WebRTC ${CUID_SHORT} Callee] Offer received, but local stream setup FAILED. Cannot create answer.`);
+          if (!streamForAnswer) { // Check if setupLocalStream failed
+            console.error(`[WebRTC ${CUID_SHORT} Callee] Offer received, but local stream setup FAILED. Cannot create answer with media.`);
             setIsNegotiating(false);
+            ignoreOffer.current = false; // Reset
             return;
           }
           
-          // Ensure tracks from the now-guaranteed localStreamRef.current are on this PC instance
           const audioTracks = streamForAnswer.getAudioTracks();
           if (audioTracks.length > 0) {
               if (!currentPC.getSenders().find(s => s.track === audioTracks[0])) {
                   currentPC.addTrack(audioTracks[0], streamForAnswer);
-                  console.log(`[WebRTC ${CUID_SHORT} Callee] Offer Handler: Added audio track.`);
+                  console.log(`[WebRTC ${CUID_SHORT} Callee] Offer Handler: Added audio track explicitly.`);
               }
           }
           const videoTracks = streamForAnswer.getVideoTracks();
           if (videoTracks.length > 0) {
               if (!currentPC.getSenders().find(s => s.track === videoTracks[0])) {
                   currentPC.addTrack(videoTracks[0], streamForAnswer);
-                  console.log(`[WebRTC ${CUID_SHORT} Callee] Offer Handler: Added video track.`);
+                  console.log(`[WebRTC ${CUID_SHORT} Callee] Offer Handler: Added video track explicitly.`);
               }
           }
-          console.log(`[WebRTC ${CUID_SHORT} Callee] Offer Handler: Local tracks on PC before setRemote(offer):`, currentPC.getSenders().map(s => `${s.track?.kind}(${s.track?.id.substring(0,5)})`));
+          console.log(`[WebRTC ${CUID_SHORT} Callee] Local tracks on PC before setRemote(offer):`, currentPC.getSenders().map(s => `${s.track?.kind}(${s.track?.id.substring(0,5)})`));
 
-          // console.log(`[WebRTC ${CUID_SHORT}] Setting remote description (offer): SDP=${signal.sdp?.substring(0,50)}...`);
           await currentPC.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: signal.sdp }));
-          
-          console.log(`[WebRTC ${CUID_SHORT}] Creating answer...`);
+          console.log(`[WebRTC ${CUID_SHORT} Callee] Remote description (offer) set. Creating answer...`);
           const answer = await currentPC.createAnswer();
-          // console.log(`[WebRTC ${CUID_SHORT}] Setting local description (answer): SDP=${answer.sdp?.substring(0,50)}...`);
           await currentPC.setLocalDescription(answer);
 
           if (roomId && currentUserId && remoteUserId && currentPC.localDescription) {
             FirestoreService.sendSignal(roomId, currentUserId, remoteUserId, { type: 'answer', sdp: currentPC.localDescription.sdp });
-            console.log(`[WebRTC ${CUID_SHORT}] Answer sent.`);
+            console.log(`[WebRTC ${CUID_SHORT} Callee] Answer sent.`);
           }
           setIsNegotiating(false);
-          makingOffer.current = false; // Reset as we've processed an offer and answered.
-          ignoreOffer.current = false;
+          makingOffer.current = false; 
+          // ignoreOffer.current = false; // Reset after answer sent and stable
 
         } else if (signal.type === 'answer') {
            if (currentPC.signalingState !== 'have-local-offer') {
-            console.warn(`[WebRTC ${CUID_SHORT}] Answer received but PC not in 'have-local-offer' state. Current state: ${currentPC.signalingState}. Ignoring.`);
+            console.warn(`[WebRTC ${CUID_SHORT} Caller] Answer received but PC not in 'have-local-offer' state. Current state: ${currentPC.signalingState}. Ignoring.`);
             return; 
           }
-          // console.log(`[WebRTC ${CUID_SHORT}] Setting remote description (answer): SDP=${signal.sdp?.substring(0,50)}...`);
           await currentPC.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: signal.sdp }));
-          console.log(`[WebRTC ${CUID_SHORT}] Remote description (answer) set.`);
-          makingOffer.current = false; // Offer-answer cycle complete for us.
-          setIsNegotiating(false); // Negotiation should be stable now.
+          console.log(`[WebRTC ${CUID_SHORT} Caller] Remote description (answer) set.`);
+          makingOffer.current = false; 
+          setIsNegotiating(false); 
 
         } else if (signal.type === 'candidate' && signal.candidate) {
           if (currentPC.remoteDescription) { 
-            // console.log(`[WebRTC ${CUID_SHORT}] Adding ICE candidate:`, (signal.candidate as RTCIceCandidate).candidate?.substring(0,30) + "...");
-             await currentPC.addIceCandidate(new RTCIceCandidate(signal.candidate as RTCIceCandidateInit));
-             // console.log(`[WebRTC ${CUID_SHORT}] ICE candidate added.`);
+            try {
+              // console.log(`[WebRTC ${CUID_SHORT}] Adding ICE candidate:`, (signal.candidate as RTCIceCandidate).candidate?.substring(0,30) + "...");
+              await currentPC.addIceCandidate(new RTCIceCandidate(signal.candidate as RTCIceCandidateInit));
+              // console.log(`[WebRTC ${CUID_SHORT}] ICE candidate added successfully.`);
+            } catch (e) {
+              console.error(`[WebRTC ${CUID_SHORT}] Error adding ICE candidate:`, e, "Candidate:", signal.candidate, "PC Signalling State:", currentPC.signalingState);
+            }
           } else {
-            console.warn(`[WebRTC ${CUID_SHORT}] Received ICE candidate but remote description not set yet. Candidate will be queued by browser or added.`);
-             await currentPC.addIceCandidate(new RTCIceCandidate(signal.candidate as RTCIceCandidateInit)); // Try adding anyway
+            console.warn(`[WebRTC ${CUID_SHORT}] Received ICE candidate but remote description is not yet set on PC instance (state: ${currentPC?.signalingState}). Candidate might be queued by browser. Candidate:`, signal.candidate);
+            // Do not attempt to add candidate if remote description is null. Browser should queue.
           }
         }
       } catch (error) {
-        console.error(`[WebRTC ${CUID_SHORT}] Error handling signal type ${signal.type}:`, error);
+        console.error(`[WebRTC ${CUID_SHORT}] Error handling signal type ${signal.type} in room ${roomId}:`, error);
         setIsNegotiating(false); 
         makingOffer.current = false;
         ignoreOffer.current = false;
@@ -361,14 +349,14 @@ export function useWebRTCSignaling({
     });
 
     return () => {
-      console.log(`[WebRTC ${CUID_SHORT}] Cleaning up signal listener for room:`, roomId);
+      console.log(`[WebRTC ${CUID_SHORT}] Cleaning up signal listener for room: ${roomId}`);
       unsubscribe();
     };
   }, [roomId, remoteUserId, currentUserId, createPeerConnection, CUID_SHORT, isNegotiating, setupLocalStream]);
 
 
   const cleanup = useCallback(async () => {
-    console.log(`[WebRTC ${CUID_SHORT}] cleanup called for room`, roomId);
+    console.log(`[WebRTC ${CUID_SHORT}] cleanup called for room: ${roomId}`);
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
       localStreamRef.current = null; 
@@ -393,11 +381,9 @@ export function useWebRTCSignaling({
     setIsNegotiating(false);
     makingOffer.current = false;
     ignoreOffer.current = false;
-    // Call onConnectionStateChange last to signify the end of the cleanup.
-    // This helps prevent immediate re-triggering of cleanup if onConnectionStateChange itself calls cleanup.
-    // The guard in ChatApp's onConnectionStateChange should handle recursion.
     onConnectionStateChange?.('closed'); 
   }, [roomId, onLocalStream, onRemoteStream, onConnectionStateChange, CUID_SHORT]);
 
   return { startCall, cleanup, setupLocalStream, peerConnection: peerConnectionRef };
 }
+
