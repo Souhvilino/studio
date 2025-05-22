@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card'; // Card is no longer used for the main video wrapper
 import { User, VideoOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -18,25 +18,26 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
 
   useEffect(() => {
     if (localVideoRef.current && localStream) {
+      console.log("[VideoArea Local] Setting local stream on video element. ID:", localStream?.id);
+      localStream.getTracks().forEach(track => {
+        console.log(`[VideoArea Local Stream Track] ID: ${track.id}, Kind: ${track.kind}, Label: ${track.label}, Enabled: ${track.enabled}, Muted: ${track.muted}, ReadyState: ${track.readyState}`);
+      });
       localVideoRef.current.srcObject = localStream;
       localVideoRef.current.play().catch(error => console.warn("[VideoArea Local] Autoplay prevented:", error));
-      console.log("[VideoArea Local] Setting local stream on video element. ID:", localStream?.id, "Tracks:", localStream?.getTracks().map(t => ({ id: t.id, kind: t.kind, label: t.label, enabled: t.enabled, muted: t.muted, readyState: t.readyState })));
     }
   }, [localStream]);
 
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
+      console.log("[VideoArea Remote] Setting remote stream on video element. ID:", remoteStream.id);
+      remoteStream.getTracks().forEach(track => {
+        console.log(`[VideoArea Remote Stream Prop] Track: id=${track.id}, kind=${track.kind}, label=${track.label}, enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
+      });
       remoteVideoRef.current.srcObject = remoteStream;
       remoteVideoRef.current.play().catch(error => console.warn("[VideoArea Remote] Autoplay prevented:", error));
-      console.log("[VideoArea Remote] Setting remote stream on video element. ID:", remoteStream?.id, "Tracks:", remoteStream?.getTracks().map(t => ({ id: t.id, kind: t.kind, label: t.label, enabled: t.enabled, muted: t.muted, readyState: t.readyState })));
-      if (remoteStream.getTracks().length > 0) {
-        remoteStream.getTracks().forEach(track => {
-          console.log(`[VideoArea Remote] Remote track from prop: id=${track.id}, kind=${track.kind}, enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
-        });
-      }
     } else if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null; 
       console.log("[VideoArea Remote] Remote stream is null, clearing srcObject.");
+      remoteVideoRef.current.srcObject = null;
     }
   }, [remoteStream]);
 
@@ -48,53 +49,50 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
   );
 
   return (
-    <div className="relative w-full md:grid md:grid-cols-2 md:gap-4">
+    // Main container: Enforce aspect-video on mobile, let grid define on desktop.
+    <div className="relative w-full aspect-video md:grid md:grid-cols-2 md:gap-4 md:aspect-auto">
       
-      {/* Local Video: PiP on mobile, grid item on desktop */}
+      {/* Remote Video: Main view on mobile, right grid cell on desktop. */}
+      <div className="w-full h-full bg-black overflow-hidden md:rounded-lg md:shadow-lg">
+        {(isChatting && remoteStream) ? (
+          <video
+            ref={remoteVideoRef}
+            autoPlay
+            playsInline
+            className="h-full w-full object-cover"
+            onLoadedMetadata={() => console.log(`[VideoArea Remote] onloadedmetadata. Video dimensions: ${remoteVideoRef.current?.videoWidth}x${remoteVideoRef.current?.videoHeight}`)}
+            onPlaying={() => console.log("[VideoArea Remote] onplaying")}
+            onError={(e) => console.error("[VideoArea Remote] onerror:", e.target instanceof HTMLVideoElement ? e.target.error : e)}
+          />
+        ) : (
+          videoPlaceholder(isChatting ? "Connecting to partner..." : "Partner's Video", "user")
+        )}
+      </div>
+
+      {/* Local Video: PiP on mobile, left grid cell on desktop. */}
       <div className={cn(
+        "overflow-hidden bg-black", // Base styles for the PiP container
         // Mobile PiP styles (default)
-        "absolute top-3 right-3 w-24 aspect-[4/3] z-20 border-2 border-white rounded-md overflow-hidden bg-black shadow-md",
+        "absolute top-3 right-3 w-24 aspect-[4/3] z-20 border-2 border-white rounded-md",
         "sm:w-28", // Slightly larger PiP on sm screens
-        // Desktop: normal flow in grid
-        "md:relative md:static md:w-full md:h-auto md:aspect-video md:top-auto md:right-auto md:z-auto md:border-0 md:rounded-lg md:shadow-none"
+        // Desktop: normal flow in grid (order-first makes it appear on the left in LTR grid)
+        "md:order-first md:relative md:static md:w-full md:h-full md:aspect-auto md:top-auto md:right-auto md:z-auto md:border-0 md:rounded-lg md:shadow-lg"
       )}>
         {localStream ? (
-          <video 
-            ref={localVideoRef} 
-            autoPlay 
-            playsInline 
-            muted 
-            className="h-full w-full object-cover" // object-cover is key for aspect ratio handling
+          <video
+            ref={localVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className="h-full w-full object-cover"
             onLoadedMetadata={() => console.log(`[VideoArea Local] onloadedmetadata. Video dimensions: ${localVideoRef.current?.videoWidth}x${localVideoRef.current?.videoHeight}`)}
             onPlaying={() => console.log("[VideoArea Local] onplaying")}
-            onError={(e) => console.error("[VideoArea Local] onerror:", e)}
+            onError={(e) => console.error("[VideoArea Local] onerror:", e.target instanceof HTMLVideoElement ? e.target.error : e)}
           />
         ) : (
           videoPlaceholder("Your Video", "user")
         )}
       </div>
-
-      {/* Remote Video Card: Main view on mobile, second grid cell on desktop (right) */}
-      <Card className="w-full aspect-video overflow-hidden shadow-md bg-black md:z-0"> 
-        <CardContent className="p-0 h-full w-full">
-          {isChatting && remoteStream ? (
-            <video 
-              ref={remoteVideoRef} 
-              autoPlay 
-              playsInline 
-              className="h-full w-full object-cover" 
-              onLoadedMetadata={() => console.log(`[VideoArea Remote] onloadedmetadata. Video dimensions: ${remoteVideoRef.current?.videoWidth}x${remoteVideoRef.current?.videoHeight}`)}
-              onPlaying={() => console.log("[VideoArea Remote] onplaying")}
-              onError={(e) => console.error("[VideoArea Remote] onerror:", e)}
-            />
-          ) : isChatting && !remoteStream ? (
-            videoPlaceholder("Connecting to partner...", "videoOff")
-          ) : (
-            videoPlaceholder("Partner's Video", "user")
-          )}
-        </CardContent>
-      </Card>
-
     </div>
   );
 }
