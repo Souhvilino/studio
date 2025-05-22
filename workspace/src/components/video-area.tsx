@@ -20,7 +20,7 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
       localVideoRef.current.play().catch(error => console.warn("[VideoArea Local] Autoplay prevented:", error));
-      console.log("[VideoArea Local] Setting local stream on video element. Stream ID:", localStream?.id);
+      console.log("[VideoArea Local] Setting local stream on video element. ID:", localStream?.id, "Tracks:", localStream?.getTracks().map(t => ({ id: t.id, kind: t.kind, label: t.label, enabled: t.enabled, muted: t.muted, readyState: t.readyState })));
     }
   }, [localStream]);
 
@@ -28,14 +28,14 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
       remoteVideoRef.current.play().catch(error => console.warn("[VideoArea Remote] Autoplay prevented:", error));
-      console.log("[VideoArea Remote] Setting remote stream on video element. Stream ID:", remoteStream?.id);
-      if (remoteStream.getTracks().length > 0) {
+      console.log("[VideoArea Remote] Setting remote stream on video element. ID:", remoteStream?.id, "Tracks:", remoteStream?.getTracks().map(t => ({ id: t.id, kind: t.kind, label: t.label, enabled: t.enabled, muted: t.muted, readyState: t.readyState })));
+       if (remoteStream.getTracks().length > 0) {
         remoteStream.getTracks().forEach(track => {
-          console.log(`[VideoArea Remote] Remote track: id=${track.id}, kind=${track.kind}, enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
+          console.log(`[VideoArea Remote] Remote track from prop: id=${track.id}, kind=${track.kind}, enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
         });
       }
     } else if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null; // Clear srcObject if remoteStream is null
+      remoteVideoRef.current.srcObject = null; 
       console.log("[VideoArea Remote] Remote stream is null, clearing srcObject.");
     }
   }, [remoteStream]);
@@ -55,17 +55,18 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
   );
 
   return (
-    // Parent container: relative for mobile PiP, becomes grid on desktop
     <div className="relative w-full md:grid md:grid-cols-2 md:gap-4">
       
-      {/* Local Video Card: PiP on mobile (top-right), first grid cell on desktop (left) */}
+      {/* Local Video Card */}
       <Card className={cn(
         "overflow-hidden shadow-md bg-black", 
-        "md:aspect-video md:relative md:top-auto md:right-auto md:z-auto md:border-0 md:rounded-lg", // Desktop: normal flow in grid, takes up its grid cell
-        "absolute top-3 right-3 w-24 h-[72px] z-20 border-2 border-white rounded-md", // Mobile: PiP styles (default)
-        "sm:w-28 sm:h-[84px]" // Slightly larger PiP on sm screens
+        // Mobile PiP styles (applied by default)
+        "absolute top-3 right-3 w-24 h-auto aspect-[4/3] z-20 border-2 border-white rounded-md", 
+        "sm:w-28", // Slightly larger PiP on sm screens
+        // Desktop: normal flow in grid, takes up its grid cell, resets PiP styles
+        "md:relative md:w-full md:h-auto md:aspect-video md:top-auto md:right-auto md:z-auto md:border-0 md:rounded-lg" 
       )}>
-        <CardContent className="p-0 h-full">
+        <CardContent className="p-0 h-full w-full">
           {localStream ? (
             <video 
               ref={localVideoRef} 
@@ -85,7 +86,7 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
 
       {/* Remote Video Card: Main view on mobile, second grid cell on desktop (right) */}
       <Card className="w-full aspect-video overflow-hidden shadow-md bg-black md:z-0"> 
-        <CardContent className="p-0 h-full">
+        <CardContent className="p-0 h-full w-full">
           {isChatting && remoteStream ? (
             <video 
               ref={remoteVideoRef} 
