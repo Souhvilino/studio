@@ -1,4 +1,5 @@
 
+      
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -53,6 +54,7 @@ export default function ChatApp() {
 
   const stableToast = useCallback(toast, []); 
 
+  const handleStartSearchRef = useRef<() => Promise<void>>(async () => {});
   const handleStopChatRef = useRef<(initiateNewSearch?: boolean) => Promise<void>>(async () => {});
   const webrtcSetupLocalStreamHookRef = useRef<() => Promise<MediaStream | null>>(async () => null);
 
@@ -200,7 +202,7 @@ export default function ChatApp() {
         console.log(`[${currentUid}] handleStopChat: FINALLY block. Setting isStoppingChatRef.current = false.`);
         isStoppingChatRef.current = false;
     }
-  }, [firebaseUser, stableWebrtcCleanup, stableToast, setActiveUserCount /* Re-add if removed accidentally */ ]); 
+  }, [firebaseUser, stableWebrtcCleanup, stableToast]); 
 
 
   const handleStartSearch = useCallback(async () => {
@@ -292,7 +294,7 @@ export default function ChatApp() {
         if (firebaseUser) await FirestoreService.updateUserStatus(firebaseUser.uid, 'idle', [], null);
       }
     }
-  }, [firebaseUser, keywordsInput, stableToast, stableWebrtcSetupLocalStreamHook]); 
+  }, [firebaseUser, keywordsInput, stableToast, stableWebrtcSetupLocalStreamHook, handleStopChatRef, webrtcSetupLocalStreamHookRef]); 
   
   useEffect(() => {
     handleStartSearchRef.current = handleStartSearch;
@@ -385,7 +387,7 @@ export default function ChatApp() {
 
         } else if (userStatus && userStatus.status === 'idle' && roomIdRef.current && (chatStateRef.current === 'chatting' || chatStateRef.current === 'connecting')) {
           console.log(`[${currentUid}] STATUS LISTENER: My status in Firestore is 'idle', but client was in room ${roomIdRef.current} (state: ${chatStateRef.current}). Cleaning up client-side.`);
-          if (chatStateRef.current !== 'idle' && !isStoppingChatRef.current) { // Added !isStoppingChatRef.current to prevent loop
+          if (chatStateRef.current !== 'idle' && !isStoppingChatRef.current) { 
              await handleStopChatRef.current(false); 
           }
         } else if (userStatus && userStatus.status === 'searching' && roomIdRef.current && (chatStateRef.current === 'chatting' || chatStateRef.current === 'connecting')) {
@@ -409,7 +411,7 @@ export default function ChatApp() {
       };
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firebaseUser?.uid, stableToast]); // Dependencies are stable as refs are used for callbacks
+  }, [firebaseUser?.uid, stableToast]); 
 
 
   const handleSendMessage = async () => {
@@ -593,6 +595,5 @@ export default function ChatApp() {
     </div>
   );
 }
-
 
     
