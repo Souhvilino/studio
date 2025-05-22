@@ -29,7 +29,7 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
       remoteVideoRef.current.srcObject = remoteStream;
       remoteVideoRef.current.play().catch(error => console.warn("[VideoArea Remote] Autoplay prevented:", error));
       console.log("[VideoArea Remote] Setting remote stream on video element. ID:", remoteStream?.id, "Tracks:", remoteStream?.getTracks().map(t => ({ id: t.id, kind: t.kind, label: t.label, enabled: t.enabled, muted: t.muted, readyState: t.readyState })));
-       if (remoteStream.getTracks().length > 0) {
+      if (remoteStream.getTracks().length > 0) {
         remoteStream.getTracks().forEach(track => {
           console.log(`[VideoArea Remote] Remote track from prop: id=${track.id}, kind=${track.kind}, enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
         });
@@ -40,49 +40,39 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
     }
   }, [remoteStream]);
 
-  const videoPlaceholder = (text: string) => (
+  const videoPlaceholder = (text: string, iconType: 'videoOff' | 'user' = 'videoOff') => (
     <div className="flex h-full w-full flex-col items-center justify-center bg-muted text-muted-foreground rounded-md">
-      <VideoOff size={48} className="mb-2" />
+      {iconType === 'videoOff' ? <VideoOff size={48} className="mb-2" /> : <User size={48} className="mb-2" />}
       <p className="text-sm">{text}</p>
     </div>
-  );
-  
-  const userIconPlaceholder = (text: string) => (
-     <div className="flex h-full w-full flex-col items-center justify-center bg-muted text-muted-foreground rounded-md">
-      <User size={48} className="mb-2" />
-      <p className="text-sm">{text}</p>
-    </div>   
   );
 
   return (
     <div className="relative w-full md:grid md:grid-cols-2 md:gap-4">
       
-      {/* Local Video Card */}
-      <Card className={cn(
-        "overflow-hidden shadow-md bg-black", 
-        // Mobile PiP styles (applied by default)
-        "absolute top-3 right-3 w-24 h-auto aspect-[4/3] z-20 border-2 border-white rounded-md", 
+      {/* Local Video: PiP on mobile, grid item on desktop */}
+      <div className={cn(
+        // Mobile PiP styles (default)
+        "absolute top-3 right-3 w-24 aspect-[4/3] z-20 border-2 border-white rounded-md overflow-hidden bg-black shadow-md",
         "sm:w-28", // Slightly larger PiP on sm screens
-        // Desktop: normal flow in grid, takes up its grid cell, resets PiP styles
-        "md:relative md:w-full md:h-auto md:aspect-video md:top-auto md:right-auto md:z-auto md:border-0 md:rounded-lg" 
+        // Desktop: normal flow in grid
+        "md:relative md:static md:w-full md:h-auto md:aspect-video md:top-auto md:right-auto md:z-auto md:border-0 md:rounded-lg md:shadow-none"
       )}>
-        <CardContent className="p-0 h-full w-full">
-          {localStream ? (
-            <video 
-              ref={localVideoRef} 
-              autoPlay 
-              playsInline 
-              muted 
-              className="h-full w-full object-cover"
-              onLoadedMetadata={() => console.log(`[VideoArea Local] onloadedmetadata. Video dimensions: ${localVideoRef.current?.videoWidth}x${localVideoRef.current?.videoHeight}`)}
-              onPlaying={() => console.log("[VideoArea Local] onplaying")}
-              onError={(e) => console.error("[VideoArea Local] onerror:", e)}
-            />
-          ) : (
-            userIconPlaceholder("Your Video")
-          )}
-        </CardContent>
-      </Card>
+        {localStream ? (
+          <video 
+            ref={localVideoRef} 
+            autoPlay 
+            playsInline 
+            muted 
+            className="h-full w-full object-cover" // object-cover is key for aspect ratio handling
+            onLoadedMetadata={() => console.log(`[VideoArea Local] onloadedmetadata. Video dimensions: ${localVideoRef.current?.videoWidth}x${localVideoRef.current?.videoHeight}`)}
+            onPlaying={() => console.log("[VideoArea Local] onplaying")}
+            onError={(e) => console.error("[VideoArea Local] onerror:", e)}
+          />
+        ) : (
+          videoPlaceholder("Your Video", "user")
+        )}
+      </div>
 
       {/* Remote Video Card: Main view on mobile, second grid cell on desktop (right) */}
       <Card className="w-full aspect-video overflow-hidden shadow-md bg-black md:z-0"> 
@@ -98,9 +88,9 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
               onError={(e) => console.error("[VideoArea Remote] onerror:", e)}
             />
           ) : isChatting && !remoteStream ? (
-            videoPlaceholder("Connecting to partner...")
+            videoPlaceholder("Connecting to partner...", "videoOff")
           ) : (
-            userIconPlaceholder("Partner's Video")
+            videoPlaceholder("Partner's Video", "user")
           )}
         </CardContent>
       </Card>
