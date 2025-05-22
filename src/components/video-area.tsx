@@ -31,11 +31,12 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
       console.log("[VideoArea Remote] Setting remote stream on video element. Stream ID:", remoteStream?.id);
       if (remoteStream.getTracks().length > 0) {
         remoteStream.getTracks().forEach(track => {
-          console.log(`[VideoArea Remote] Remote track: kind=${track.kind}, id=${track.id}, enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
+          console.log(`[VideoArea Remote] Remote track: id=${track.id}, kind=${track.kind}, enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
         });
       }
     } else if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = null; // Clear srcObject if remoteStream is null
+      console.log("[VideoArea Remote] Remote stream is null, clearing srcObject.");
     }
   }, [remoteStream]);
 
@@ -59,9 +60,9 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
       
       {/* Local Video Card: PiP on mobile (top-right), first grid cell on desktop (left) */}
       <Card className={cn(
-        "overflow-hidden shadow-md bg-black", // bg-black to avoid placeholder flash if video takes time
-        "md:aspect-video md:relative md:top-auto md:right-auto md:z-auto md:border-0 md:rounded-lg", // Desktop: normal flow in grid
-        "absolute top-3 right-3 w-24 h-[72px] z-20 border-2 border-white rounded-md", // Mobile: PiP styles (w-24 (96px) -> 4:3 height is 72px (h-18))
+        "overflow-hidden shadow-md bg-black", 
+        "md:aspect-video md:relative md:top-auto md:right-auto md:z-auto md:border-0 md:rounded-lg", // Desktop: normal flow in grid, takes up its grid cell
+        "absolute top-3 right-3 w-24 h-[72px] z-20 border-2 border-white rounded-md", // Mobile: PiP styles (default)
         "sm:w-28 sm:h-[84px]" // Slightly larger PiP on sm screens
       )}>
         <CardContent className="p-0 h-full">
@@ -83,7 +84,7 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
       </Card>
 
       {/* Remote Video Card: Main view on mobile, second grid cell on desktop (right) */}
-      <Card className="w-full aspect-video overflow-hidden shadow-md bg-black md:z-0"> {/* bg-black to avoid placeholder flash */}
+      <Card className="w-full aspect-video overflow-hidden shadow-md bg-black md:z-0"> 
         <CardContent className="p-0 h-full">
           {isChatting && remoteStream ? (
             <video 
