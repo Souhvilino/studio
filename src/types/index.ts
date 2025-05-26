@@ -1,5 +1,6 @@
 
 import type { Timestamp } from 'firebase/firestore';
+import type { GetIpLocationOutput } from '@/ai/flows/get-ip-location-flow';
 
 export interface ChatMessage {
   id: string;
@@ -23,6 +24,8 @@ export interface ReportData {
   roomId: string | null;
   timestamp?: any; // Firestore ServerTimestamp from write, Firestore Timestamp on read
   timestampDate?: Date; // JavaScript Date object for client-side use
+  screenshotUrl?: string; // URL of the uploaded screenshot
+  reporterLocationData?: GetIpLocationOutput; // Geolocation data of the reporter (server-approximated by the flow's execution context)
 }
 
 export interface UserStatusData {
@@ -54,4 +57,3 @@ export interface SignalData {
   signal: SignalPayload;
   timestamp: any; // Firestore ServerTimestamp
 }
-    
