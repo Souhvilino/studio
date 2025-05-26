@@ -54,7 +54,8 @@ const nextConfig = {
   experimental: {
     allowedDevOrigins: [
       "http://localhost:9004", // Default local dev
-      "https://9004-firebase-studio-1747836424073.cluster-3gc7bglotjgwuxlqpiut7yyqt4.cloudworkstations.dev" // Specific domain from error
+      "https://9004-firebase-studio-1747836424073.cluster-3gc7bglotjgwuxlqpiut7yyqt4.cloudworkstations.dev",
+      "https://7b54-34-13-167-125.ngrok-free.app" // Added new ngrok URL
       // Add other development preview domains if necessary
     ],
   },
@@ -67,5 +68,3 @@ const nextConfig = {
 };
 
 module.exports = nextConfig;
-
-    

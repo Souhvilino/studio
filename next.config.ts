@@ -70,7 +70,8 @@ const nextConfig = {
    experimental: {
     allowedDevOrigins: [
       "http://localhost:9004", // Keep this for general local dev if needed
-      "https://9004-firebase-studio-1747836424073.cluster-3gc7bglotjgwuxlqpiut7yyqt4.cloudworkstations.dev"
+      "https://9004-firebase-studio-1747836424073.cluster-3gc7bglotjgwuxlqpiut7yyqt4.cloudworkstations.dev",
+      "https://7b54-34-13-167-125.ngrok-free.app" // Added new ngrok URL
       // Add any other specific preview domains if they change or if you have others
     ],
   },
