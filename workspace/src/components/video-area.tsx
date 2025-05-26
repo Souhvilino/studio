@@ -8,55 +8,48 @@ import { cn } from '@/lib/utils';
 interface VideoAreaProps {
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
-  isChatting: boolean;
+  isChatting: boolean; // This prop is no longer strictly necessary for placeholder logic if we simplify
 }
 
-export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaProps) {
+export function VideoArea({ localStream, remoteStream }: VideoAreaProps) {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (localVideoRef.current && localStream) {
-      console.log("[VideoArea Local] Setting local stream on video element. ID:", localStream?.id, "Tracks:", localStream?.getTracks().map(t => `${t.kind}:${t.label.substring(0,10)}(${t.id.substring(0,5)}) ${t.readyState} muted:${t.muted} enabled:${t.enabled}`));
+      console.log("[VideoArea Local] Setting local stream on video element. ID:", localStream?.id, "Tracks active:", localStream?.active);
+      localStream.getTracks().forEach(track => {
+        console.log(`[VideoArea Local] Local Track: kind=${track.kind}, id=${track.id.substring(0,5)}, label=${track.label.substring(0,10)}, enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
+      });
       localVideoRef.current.srcObject = localStream;
-      localVideoRef.current.play().catch(error => console.warn("[VideoArea Local] Autoplay prevented:", error));
+      localVideoRef.current.play().catch(error => console.warn("[VideoArea Local] localVideoRef.play() promise rejected:", error));
     } else {
       if (localVideoRef.current) localVideoRef.current.srcObject = null;
+      console.log("[VideoArea Local] Local stream is null or video ref is not current, clearing srcObject.");
     }
   }, [localStream]);
 
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
-      console.log("[VideoArea Remote] Setting remote stream on video element. ID:", remoteStream.id);
+      console.log("[VideoArea Remote] Setting remote stream on video element. ID:", remoteStream.id, "Tracks active:", remoteStream.active);
       const videoTracks = remoteStream.getVideoTracks();
       const audioTracks = remoteStream.getAudioTracks();
       console.log(`[VideoArea Remote] Stream has ${videoTracks.length} video tracks and ${audioTracks.length} audio tracks.`);
 
-      if (videoTracks.length > 0) {
-        videoTracks.forEach(track => {
-          console.log(`[VideoArea Remote Video Track Details] ID: ${track.id.substring(0,5)}, Kind: ${track.kind}, Label: ${track.label.substring(0,10)}, Enabled: ${track.enabled}, Muted: ${track.muted}, ReadyState: ${track.readyState}`);
-          if (!track.enabled) console.warn(`[VideoArea Remote] CRITICAL: Video track ${track.id.substring(0,5)} is NOT ENABLED.`);
-          if (track.readyState !== 'live') console.warn(`[VideoArea Remote] CRITICAL: Video track ${track.id.substring(0,5)} readyState is ${track.readyState}, not 'live'.`);
-        });
-      } else {
-        console.warn("[VideoArea Remote] CRITICAL: Remote stream has NO video tracks.");
-      }
-       if (audioTracks.length > 0) {
-        audioTracks.forEach(track => {
-          console.log(`[VideoArea Remote Audio Track Details] ID: ${track.id.substring(0,5)}, Kind: ${track.kind}, Label: ${track.label.substring(0,10)}, Enabled: ${track.enabled}, Muted: ${track.muted}, ReadyState: ${track.readyState}`);
-           if (!track.enabled) console.warn(`[VideoArea Remote] CRITICAL: Audio track ${track.id.substring(0,5)} is NOT ENABLED.`);
-           if (track.muted) console.warn(`[VideoArea Remote] NOTE: Audio track ${track.id.substring(0,5)} IS MUTED.`); // This might be expected initially for autoplay
-        });
-      } else {
-        console.warn("[VideoArea Remote] CRITICAL: Remote stream has NO audio tracks.");
-      }
+      videoTracks.forEach(track => {
+        console.log(`[VideoArea Remote Video Track Details] ID: ${track.id.substring(0,5)}, Kind: ${track.kind}, Label: ${track.label.substring(0,10)}, Enabled: ${track.enabled}, Muted: ${track.muted}, ReadyState: ${track.readyState}`);
+      });
+      audioTracks.forEach(track => {
+        console.log(`[VideoArea Remote Audio Track Details] ID: ${track.id.substring(0,5)}, Kind: ${track.kind}, Label: ${track.label.substring(0,10)}, Enabled: ${track.enabled}, Muted: ${track.muted}, ReadyState: ${track.readyState}`);
+      });
 
       remoteVideoRef.current.srcObject = remoteStream;
-      // Attempt to play. Autoplay policies might prevent unmuted audio initially.
-      remoteVideoRef.current.play().catch(error => console.warn("[VideoArea Remote] Autoplay prevented for remote stream:", error));
+      remoteVideoRef.current.play()
+        .then(() => console.log("[VideoArea Remote] remoteVideoRef.play() successful."))
+        .catch(error => console.warn("[VideoArea Remote] remoteVideoRef.play() promise rejected:", error));
     } else {
-      console.log("[VideoArea Remote] Remote stream is null or video ref is not current, clearing srcObject.");
       if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+      console.log("[VideoArea Remote] Remote stream is null or video ref is not current, clearing srcObject.");
     }
   }, [remoteStream]);
 
@@ -68,18 +61,23 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
   );
 
   return (
-    <div className="relative w-full aspect-video md:grid md:grid-cols-2 md:gap-4 md:aspect-auto">
-      {/* Remote Video (Partner's Video) */}
-      <div className="w-full h-full bg-black overflow-hidden md:rounded-lg md:shadow-lg md:aspect-video">
+    <div className={cn(
+      "relative w-full bg-black", // Added bg-black to main container for consistent backdrop
+      "aspect-video md:grid md:grid-cols-2 md:gap-1 md:aspect-auto" // md:gap-1 for a small space
+    )}>
+      {/* Remote Video (Partner's Video) - Takes up main space */}
+      <div className="w-full h-full bg-black overflow-hidden md:rounded-lg md:shadow-lg">
         <video
           ref={remoteVideoRef}
           playsInline
-          autoPlay // autoPlay is important
-          className="h-full w-full object-cover"
+          autoPlay
+          className="h-full w-full object-contain md:object-cover" // Use object-contain for mobile aspect, object-cover for desktop
           onLoadedMetadata={(e) => {
             const video = e.target as HTMLVideoElement;
             console.log(`[VideoArea Remote] onloadedmetadata. Video dimensions: ${video.videoWidth}x${video.videoHeight}, Duration: ${video.duration}`);
           }}
+          onLoadedData={() => console.log("[VideoArea Remote] onloadeddata")}
+          onCanPlay={() => console.log("[VideoArea Remote] oncanplay")}
           onPlaying={() => console.log("[VideoArea Remote] onplaying")}
           onPause={() => console.log("[VideoArea Remote] onpause")}
           onEnded={() => console.log("[VideoArea Remote] onended")}
@@ -90,16 +88,22 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
             console.error("[VideoArea Remote] video element error:", videoEl.error);
           }}
         />
-        {/* Conditional placeholder rendering */}
-        {((!remoteStream && isChatting) || (!remoteStream && !isChatting)) && videoPlaceholder(isChatting ? "Waiting for partner's video..." : "Connecting to partner...", "user")}
+        {!remoteStream && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            {videoPlaceholder("Waiting for partner's video...", "user")}
+          </div>
+        )}
       </div>
 
-      {/* Local Video (Your Video) */}
+      {/* Local Video (Your Video) - PiP on mobile, side on desktop */}
       <div className={cn(
-        "overflow-hidden shadow-md bg-black", 
-        "absolute top-3 right-3 w-24 aspect-[4/3] z-20 border-2 border-white rounded-md", 
-        "sm:w-28",
-        "md:order-first md:relative md:static md:w-full md:aspect-video md:top-auto md:right-auto md:z-auto md:border-0 md:rounded-lg"
+        "overflow-hidden shadow-md bg-black border-2 border-white rounded-md", 
+        // Mobile PiP styles (default)
+        "absolute top-3 right-3 w-24 h-auto aspect-[4/3] z-20", 
+        // Tablet PiP styles
+        "sm:w-32",
+        // Desktop side-by-side styles
+        "md:order-first md:relative md:static md:w-full md:h-auto md:aspect-video md:top-auto md:right-auto md:z-auto md:border-0 md:rounded-lg"
       )}>
         {localStream ? (
           <video
@@ -125,5 +129,3 @@ export function VideoArea({ localStream, remoteStream, isChatting }: VideoAreaPr
     </div>
   );
 }
-
-    
