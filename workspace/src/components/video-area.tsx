@@ -8,7 +8,6 @@ import { cn } from '@/lib/utils';
 interface VideoAreaProps {
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
-  isChatting: boolean; // This prop is no longer strictly necessary for placeholder logic if we simplify
 }
 
 export function VideoArea({ localStream, remoteStream }: VideoAreaProps) {
@@ -25,7 +24,7 @@ export function VideoArea({ localStream, remoteStream }: VideoAreaProps) {
       localVideoRef.current.play().catch(error => console.warn("[VideoArea Local] localVideoRef.play() promise rejected:", error));
     } else {
       if (localVideoRef.current) localVideoRef.current.srcObject = null;
-      console.log("[VideoArea Local] Local stream is null or video ref is not current, clearing srcObject.");
+      // console.log("[VideoArea Local] Local stream is null or video ref is not current, clearing srcObject.");
     }
   }, [localStream]);
 
@@ -42,14 +41,14 @@ export function VideoArea({ localStream, remoteStream }: VideoAreaProps) {
       audioTracks.forEach(track => {
         console.log(`[VideoArea Remote Audio Track Details] ID: ${track.id.substring(0,5)}, Kind: ${track.kind}, Label: ${track.label.substring(0,10)}, Enabled: ${track.enabled}, Muted: ${track.muted}, ReadyState: ${track.readyState}`);
       });
-
+      
       remoteVideoRef.current.srcObject = remoteStream;
       remoteVideoRef.current.play()
         .then(() => console.log("[VideoArea Remote] remoteVideoRef.play() successful."))
-        .catch(error => console.warn("[VideoArea Remote] remoteVideoRef.play() promise rejected:", error));
+        .catch(error => console.warn("[VideoArea Remote] Autoplay prevented for remote stream:", error.name, error.message, "https://goo.gl/LdLk22"));
     } else {
       if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-      console.log("[VideoArea Remote] Remote stream is null or video ref is not current, clearing srcObject.");
+      // console.log("[VideoArea Remote] Remote stream is null or video ref is not current, clearing srcObject.");
     }
   }, [remoteStream]);
 
@@ -62,16 +61,16 @@ export function VideoArea({ localStream, remoteStream }: VideoAreaProps) {
 
   return (
     <div className={cn(
-      "relative w-full bg-black", // Added bg-black to main container for consistent backdrop
-      "aspect-video md:grid md:grid-cols-2 md:gap-1 md:aspect-auto" // md:gap-1 for a small space
+      "relative w-full bg-black", 
+      "aspect-video md:grid md:grid-cols-2 md:gap-1 md:aspect-auto" 
     )}>
-      {/* Remote Video (Partner's Video) - Takes up main space */}
-      <div className="w-full h-full bg-black overflow-hidden md:rounded-lg md:shadow-lg">
+      {/* Remote Video (Partner's Video) */}
+      <div className="w-full h-full bg-black overflow-hidden md:rounded-lg md:shadow-lg md:aspect-video">
         <video
           ref={remoteVideoRef}
           playsInline
           autoPlay
-          className="h-full w-full object-contain md:object-cover" // Use object-contain for mobile aspect, object-cover for desktop
+          className="h-full w-full object-cover block" 
           onLoadedMetadata={(e) => {
             const video = e.target as HTMLVideoElement;
             console.log(`[VideoArea Remote] onloadedmetadata. Video dimensions: ${video.videoWidth}x${video.videoHeight}, Duration: ${video.duration}`);
@@ -95,23 +94,20 @@ export function VideoArea({ localStream, remoteStream }: VideoAreaProps) {
         )}
       </div>
 
-      {/* Local Video (Your Video) - PiP on mobile, side on desktop */}
+      {/* Local Video (Your Video) */}
       <div className={cn(
-        "overflow-hidden shadow-md bg-black border-2 border-white rounded-md", 
-        // Mobile PiP styles (default)
-        "absolute top-3 right-3 w-24 h-auto aspect-[4/3] z-20", 
-        // Tablet PiP styles
-        "sm:w-32",
-        // Desktop side-by-side styles
-        "md:order-first md:relative md:static md:w-full md:h-auto md:aspect-video md:top-auto md:right-auto md:z-auto md:border-0 md:rounded-lg"
+        "overflow-hidden shadow-md bg-black", 
+        "absolute top-3 right-3 w-24 aspect-[4/3] z-20 border-2 border-white rounded-md", 
+        "sm:w-28",
+        "md:order-first md:relative md:static md:w-full md:h-auto md:aspect-video md:z-auto md:border-0 md:rounded-lg md:shadow-lg"
       )}>
         {localStream ? (
           <video
             ref={localVideoRef}
             autoPlay
             playsInline
-            muted // Local preview is usually muted
-            className="h-full w-full object-cover"
+            muted 
+            className="h-full w-full object-cover block"
             onLoadedMetadata={(e) => {
               const video = e.target as HTMLVideoElement;
               console.log(`[VideoArea Local] onloadedmetadata. Video dimensions: ${video.videoWidth}x${video.videoHeight}`);
