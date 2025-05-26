@@ -164,7 +164,7 @@ export async function cleanupRoom(roomId: string, currentUserId: string): Promis
 
   try {
     const roomData = await getRoomData(roomId); 
-    if (roomData &amp;&amp; roomData.status !== 'closed') { 
+    if (roomData && roomData.status !== 'closed') { 
       roomData.users.forEach(userId => {
         const userStatusRef = doc(db, 'userStatuses', userId);
         batch.update(userStatusRef, { status: 'idle', roomId: null, keywords: [] });
@@ -172,18 +172,18 @@ export async function cleanupRoom(roomId: string, currentUserId: string): Promis
       });
       batch.update(roomRef, { status: 'closed', endedAt: serverTimestamp() });
       console.log(`[FirestoreService][${currentTimestamp.toMillis()}] cleanupRoom: Queued update for room ${roomId} to closed.`);
-    } else if (roomData &amp;&amp; roomData.status === 'closed') {
+    } else if (roomData && roomData.status === 'closed') {
       console.log(`[FirestoreService][${currentTimestamp.toMillis()}] cleanupRoom: Room ${roomId} is already closed. Ensuring initiating user ${currentUserId.substring(0,5)} is idle if associated with this room.`);
        const currentUserStatusRef = doc(db, 'userStatuses', currentUserId);
        const currentUserStatusSnap = await getDoc(currentUserStatusRef);
-       if(currentUserStatusSnap.exists() &amp;&amp; currentUserStatusSnap.data().roomId === roomId) { 
+       if(currentUserStatusSnap.exists() && currentUserStatusSnap.data().roomId === roomId) { 
            batch.update(currentUserStatusRef, { status: 'idle', roomId: null, keywords: [] });
        }
     } else {
         console.log(`[FirestoreService][${currentTimestamp.toMillis()}] cleanupRoom: Room ${roomId} not found or no action needed for its current status. Ensuring initiating user ${currentUserId.substring(0,5)} is idle if not already.`);
         const currentUserStatusRef = doc(db, 'userStatuses', currentUserId);
         const currentUserStatusSnap = await getDoc(currentUserStatusRef);
-        if(currentUserStatusSnap.exists() &amp;&amp; currentUserStatusSnap.data().status !== 'idle') {
+        if(currentUserStatusSnap.exists() && currentUserStatusSnap.data().status !== 'idle') {
             batch.update(currentUserStatusRef, { status: 'idle', roomId: null, keywords: [] });
         }
     }
@@ -243,7 +243,7 @@ export function listenForSignals(roomId: string, currentUserId: string, callback
 
 
 // --- Chat Messages ---
-export async function sendMessage(roomId: string, message: Omit<ChatMessage, 'id' | 'timestamp' | 'isLocalUser'> &amp; { timestamp?: any }): Promise<string> {
+export async function sendMessage(roomId: string, message: Omit<ChatMessage, 'id' | 'timestamp' | 'isLocalUser'> & { timestamp?: any }): Promise<string> {
   const currentTimestamp = Timestamp.now();
   // console.log(`[FirestoreService][${currentTimestamp.toMillis()}] sendMessage to room ${roomId}: "${message.text.substring(0, 30)}${message.text.length > 30 ? '...' : ''}" by user ${message.userId.substring(0,5)}`);
   const messagesCollection = collection(db, `rooms/${roomId}/messages`);
@@ -352,3 +352,4 @@ export async function getReports(): Promise<ReportData[]> {
     throw error; 
   }
 }
+
