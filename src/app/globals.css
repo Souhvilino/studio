@@ -2,112 +2,103 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
-  /* New overall background color */
-  @apply bg-amber-50; 
-}
-
 @layer base {
   :root {
-    /* Existing theme variables - adjust if needed for new design consistency */
-    --background: 220 13% 94%; /* Light gray #F0F2F5 - This is for components like Card, might contrast with body */
-    --foreground: 240 10% 3.9%; /* Near black */
+    /* Light Theme derived from your palette */
+    --background: 33 60% 97%; /* Isabelline: #fcf8f3 */
+    --foreground: 210 5% 9%;   /* Night: #151617 */
 
-    --card: 0 0% 100%; /* White - For the main content box */
-    --card-foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;         /* White */
+    --card-foreground: 210 5% 9%; /* Night */
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;      /* White */
+    --popover-foreground: 210 5% 9%; /* Night */
 
-    --primary: 245 50% 74%; /* Soft purple #A098E1 */
-    --primary-foreground: 245 100% 98%; /* Light purple/white */
+    --primary: 210 99% 57%;    /* Dodger Blue: #2491fe */
+    --primary-foreground: 33 60% 97%; /* Isabelline (for contrast on Dodger Blue) */
     
-    /* Uhmegle-like blue for buttons */
-    --uhmegle-blue: 217 91% 60%; /* approx #3B82F6 */
-    --uhmegle-blue-foreground: 0 0% 100%;
+    --secondary: 210 2% 40%;   /* Dim Gray: #646668 */
+    --secondary-foreground: 33 60% 97%; /* Isabelline */
 
+    --muted: 34 55% 87%; /* Isabelline shade (lighter than dim-gray's 800) for a softer muted background */
+    --muted-foreground: 210 2% 32%; /* Dim Gray shade (darker for text on light muted) */
 
-    --secondary: 220 13% 90%; /* Slightly darker gray */
-    --secondary-foreground: 240 10% 3.9%;
+    --accent: 28 99% 55%;      /* Orange (wheel): #fe8318 */
+    --accent-foreground: 210 5% 9%; /* Night (for contrast on Orange) */
 
-    --muted: 220 13% 85%; /* Muted gray */
-    --muted-foreground: 220 10% 45.1%;
+    --destructive: 0 84.2% 60.2%; /* Default red */
+    --destructive-foreground: 0 0% 98%; /* Default light text for destructive */
 
-    --accent: 195 22% 58%; /* Muted teal #79A3B1 */
-    --accent-foreground: 0 0% 100%; /* White */
+    --border: 33 20% 88%;      /* Lighter Dim Gray / Darker Isabelline: e.g. derived from #e0e0e1 */
+    --input: 0 0% 100%;         /* White background for inputs */
+    --ring: 210 99% 57%;       /* Dodger Blue for focus rings */
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
+    --radius: 0.5rem;
 
-    --border: 220 13% 80%;
-    --input: 220 13% 88%;
-    --ring: 245 50% 74%; /* Primary color for focus rings */
+    /* Sidebar - Light Theme */
+    --sidebar-background: 33 60% 97%; /* Isabelline */
+    --sidebar-foreground: 210 5% 9%;   /* Night */
+    --sidebar-primary: 210 99% 57%;    /* Dodger Blue */
+    --sidebar-primary-foreground: 33 60% 97%; /* Isabelline */
+    --sidebar-accent: 34 55% 87%; /* Lighter Isabelline shade for active/hover */
+    --sidebar-accent-foreground: 210 5% 9%;   /* Night */
+    --sidebar-border: 33 20% 88%;      /* Lighter Dim Gray / Darker Isabelline */
+    --sidebar-ring: 210 99% 57%;       /* Dodger Blue */
 
+    /* Chart colors (can be adjusted or taken from palette if needed) */
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   .dark {
-    /* Adjust dark theme if necessary, or remove if not supporting dark theme with this new design */
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
+    /* Dark Theme derived from your palette */
+    --background: 210 5% 9%;   /* Night: #151617 */
+    --foreground: 33 60% 97%; /* Isabelline: #fcf8f3 */
 
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
+    --card: 210 4% 7%;         /* Very dark gray, e.g., night.300: #0d0e0e */
+    --card-foreground: 33 60% 97%; /* Isabelline */
 
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 210 4% 7%;      /* Very dark gray */
+    --popover-foreground: 33 60% 97%; /* Isabelline */
 
-    --primary: 245 50% 74%; 
-    --primary-foreground: 245 100% 98%;
+    --primary: 210 99% 57%;    /* Dodger Blue */
+    --primary-foreground: 33 60% 97%; /* Isabelline (for contrast on Dodger Blue) */
+    
+    --secondary: 210 2% 40%;   /* Dim Gray: #646668 */
+    --secondary-foreground: 33 60% 97%; /* Isabelline */
 
-    --uhmegle-blue: 217 91% 60%; 
-    --uhmegle-blue-foreground: 0 0% 100%;
+    --muted: 216 4% 27%;       /* Darker Dim Gray, e.g., night.600: #424549 */
+    --muted-foreground: 210 2% 76%; /* Lighter Dim Gray, e.g., dim_gray.800: #c1c2c3 */
 
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
+    --accent: 28 99% 55%;      /* Orange (wheel) */
+    --accent-foreground: 210 5% 9%;   /* Night (for contrast on Orange) */
 
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 0 0% 63.9%;
+    --destructive: 0 62.8% 30.6%; /* Darker red */
+    --destructive-foreground: 33 60% 97%; /* Isabelline */
 
-    --accent: 195 22% 58%; 
-    --accent-foreground: 0 0% 100%;
+    --border: 210 2% 32%;      /* Medium Dim Gray, e.g., dim_gray.400: #505253 */
+    --input: 240 3% 6%;         /* Darker Night, e.g., night.200: #09090a */
+    --ring: 210 99% 57%;       /* Dodger Blue */
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 245 50% 74%;
-
+    /* Sidebar - Dark Theme */
+    --sidebar-background: 210 5% 9%;   /* Night */
+    --sidebar-foreground: 33 60% 97%; /* Isabelline */
+    --sidebar-primary: 210 99% 57%;    /* Dodger Blue */
+    --sidebar-primary-foreground: 33 60% 97%; /* Isabelline */
+    --sidebar-accent: 216 4% 27%;       /* Darker Dim Gray for active/hover */
+    --sidebar-accent-foreground: 33 60% 97%; /* Isabelline */
+    --sidebar-border: 210 2% 32%;      /* Medium Dim Gray */
+    --sidebar-ring: 210 99% 57%;       /* Dodger Blue */
+    
+    /* Chart colors (can be adjusted) */
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
 
@@ -115,5 +106,8 @@ body {
   * {
     @apply border-border;
   }
-  /* body is already handled above with the new background */
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  }
 }
