@@ -64,27 +64,27 @@ export default function AdminReportsPage() {
           <CardTitle className="text-xl">All Reports</CardTitle>
         </CardHeader>
         <CardContent>
-          {loading &amp;&amp; (
+          {loading && (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-10 w-10 animate-spin text-primary" />
               <p className="ml-4 text-lg text-muted-foreground">Loading reports...</p>
             </div>
           )}
-          {error &amp;&amp; (
+          {error && (
             <div className="flex flex-col items-center justify-center py-12 text-destructive bg-destructive/10 p-6 rounded-md">
               <AlertTriangle className="h-10 w-10 mb-3" />
               <p className="text-lg font-semibold">Error Loading Reports</p>
               <p className="text-sm text-center">{error}</p>
             </div>
           )}
-          {!loading &amp;&amp; !error &amp;&amp; reports.length === 0 &amp;&amp; (
+          {!loading && !error && reports.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               <FileText size={48} className="mx-auto mb-4" />
               <p className="text-xl">No reports found.</p>
               <p>It seems no users have submitted any reports yet.</p>
             </div>
           )}
-          {!loading &amp;&amp; !error &amp;&amp; reports.length > 0 &amp;&amp; (
+          {!loading && !error && reports.length > 0 && (
             <div className="overflow-x-auto">
               <Table>
                 <TableCaption className="mt-4">A list of user-submitted reports. Newest reports are shown first.</TableCaption>
@@ -135,9 +135,9 @@ export default function AdminReportsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs whitespace-nowrap">
-                        {report.reporterLocationData?.country &amp;&amp; report.reporterLocationData?.city ? 
+                        {report.reporterLocationData?.country && report.reporterLocationData?.city ? 
                          `${report.reporterLocationData.city}, ${report.reporterLocationData.country}` : 
-                         report.reporterLocationData?.country || <span className="text-muted-foreground italic">N/A</span>}
+                         (report.reporterLocationData?.country || <span className="text-muted-foreground italic">N/A</span>)}
                       </TableCell>
                       <TableCell className="font-mono text-xs truncate max-w-[100px]">
                         {report.roomId || <span className="text-muted-foreground italic">N/A</span>}
@@ -170,4 +170,3 @@ export default function AdminReportsPage() {
     </div>
   );
 }
-
