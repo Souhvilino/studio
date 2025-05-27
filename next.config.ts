@@ -1,4 +1,3 @@
-
 // @ts-check
 
 // Attempt to load environment variables from /workspace/.env specifically for next.config.js context
@@ -21,7 +20,7 @@ try {
   // So, path.resolve(process.cwd(), 'workspace', '.env') should be correct for Studio.
   // If this next.config.ts is actually /workspace/next.config.ts, then path.resolve(process.cwd(), '.env')
   const envPath = path.resolve(process.cwd(), 'workspace', '.env'); // Adjusted for potential execution from /
-  
+
   const result = dotenv.config({ path: envPath, override: true });
 
   if (result.error) {
@@ -29,7 +28,7 @@ try {
   } else if (result.parsed) {
     console.log(`[next.config.js - root] Successfully loaded environment variables from ${envPath}`);
     console.log('[next.config.js - root] Keys loaded by dotenv:', Object.keys(result.parsed));
-    
+
     // Forcefully set them onto process.env within this config file's scope
     // for (const key in result.parsed) {
     //   if (Object.prototype.hasOwnProperty.call(result.parsed, key)) {
@@ -51,6 +50,9 @@ import '@/lib/test-import'; // Diagnostic import
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // IMPORTANT: Configuration pour l'exportation statique (nécessaire pour Netlify)
+  output: 'export',
+
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -58,6 +60,7 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   images: {
+    unoptimized: true, // Nécessaire pour le déploiement sur Netlify
     remotePatterns: [
       {
         protocol: 'https',
@@ -65,19 +68,33 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
-   experimental: {
+  experimental: {
     allowedDevOrigins: [
-      "http://localhost:9004", // Keep this for general local dev if needed
+      "http://localhost:9004",
       "https://9004-firebase-studio-1747836424073.cluster-3gc7bglotjgwuxlqpiut7yyqt4.cloudworkstations.dev",
-      "https://7b54-34-13-167-125.ngrok-free.app" // Added new ngrok URL
-      // Add any other specific preview domains if they change or if you have others
+      "https://7b54-34-13-167-125.ngrok-free.app"
     ],
   },
-  // No explicit env property needed here if Next.js standard .env loading works.
+  // Désactiver la minification en développement pour mieux déboguer
+  swcMinify: true,
+  // Configuration du compilateur
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
 };
 
 module.exports = nextConfig;
-
-    

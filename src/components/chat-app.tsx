@@ -232,15 +232,35 @@ export default function ChatApp() {
     let clientLocationData: GetIpLocationOutput | null = null;
     try {
       console.log(`[${localCUID}] handleStartSearchReal: Fetching client IP location...`);
-      const response = await fetch('https://freeipapi.com/api/json/');
-      if (response.ok) {
-        clientLocationData = await response.json() as GetIpLocationOutput;
+      // Try multiple IP geolocation APIs in case one fails
+      let response: Response | null = null;
+      
+      // Try ipapi.co first (more reliable)
+      try {
+        response = await fetch('https://ipapi.co/json/');
+      } catch (e) {
+        console.warn(`[${localCUID}] ipapi.co failed, trying ip-api.com...`);
+        // Fallback to ip-api.com
+        response = await fetch('http://ip-api.com/json/');
+      }
+      
+      if (response && response.ok) {
+        const data = await response.json();
+        // Normalize response format
+        clientLocationData = {
+          countryCode: data.country_code || data.countryCode || 'US',
+          countryName: data.country || data.countryName || 'United States',
+          city: data.city || 'Unknown',
+          region: data.region || data.regionName || 'Unknown'
+        };
         console.log(`[${localCUID}] handleStartSearchReal: Client IP Location fetched: ${clientLocationData?.countryName} (${clientLocationData?.countryCode})`);
       } else {
-        console.warn(`[${localCUID}] handleStartSearchReal: Failed to fetch client IP location, status: ${response.status}`);
+        console.warn(`[${localCUID}] handleStartSearchReal: Failed to fetch client IP location, status: ${response?.status}`);
       }
     } catch (err) {
       console.error(`[${localCUID}] handleStartSearchReal: Error fetching client IP location:`, err);
+      // Continue without location data - don't block the search
+      clientLocationData = null;
     }
 
     const normalizedSearchKeywords = keywordsInput.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);

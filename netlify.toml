@@ -1,0 +1,23 @@
+[build]
+command = "npm run build"
+publish = ".next"  # Gardez .next
+
+[build.environment]
+NODE_VERSION = "20"
+
+# Redirections pour les API
+[[redirects]]
+from = "/api/*"
+to = "/.netlify/functions/api/:splat"
+status = 200
+
+# Redirection pour le routage côté client
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200
+
+# Configuration des fonctions serverless
+[functions]
+directory = "netlify/functions"
+node_bundler = "esbuild"
