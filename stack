@@ -1,0 +1,17 @@
+Core Technology Stack:
+Framework: Next.js (a popular framework built on top of React).
+Language: TypeScript for type safety and a better developer experience.
+UI & Styling: We're using Tailwind CSS for utility-first styling and ShadCN UI for the pre-built, accessible React components you see (like the buttons, cards, dialogs, etc.).
+Real-time & Backend Services:
+Video/Audio Chat: The core of the video and audio communication is built using WebRTC. This technology allows browsers to communicate directly with each other for real-time media streaming.
+Backend & Signaling: Firebase is the primary backend service.
+Firestore: Used as the "signaling server" to help users find each other and exchange the information needed to establish a WebRTC connection. It also stores user statuses (like 'searching' or 'chatting'), chat rooms, and the text messages themselves.
+Firebase Authentication: Used for the anonymous sign-in system, giving each user a unique but anonymous ID.
+Firebase Storage: Used to store the screenshots uploaded with user reports.
+External APIs:
+Generative AI (Genkit): We use Genkit, a framework for building AI-powered features, which connects to Google's Gemini models for:
+AI Content Moderation: To check if messages are safe before they are sent.
+Real-time Translation: For the "Translate" button on messages.
+Geolocation: To get an approximate location for users (like the country name and flag), we use public IP-based geolocation APIs like ip-api.com and ipapi.co.
+TURN Server API: To help users connect even when they are on restrictive networks (like some mobile 4G/LTE networks), the app dynamically fetches special server credentials from the https://anonchatter.metered.live API endpoint.
+In short, it's a modern web app using Next.js and React on the frontend, with Firebase providing the real-time backend infrastructure, and a touch of Genkit for the AI features
